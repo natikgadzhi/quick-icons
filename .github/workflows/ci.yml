@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Test
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xcbeautify
+        run: brew install xcbeautify
+
+      - name: Run tests
+        run: |
+          xcodebuild test \
+            -project QuickIcons.xcodeproj \
+            -scheme QuickIconsTests \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            | xcbeautify --renderer github-actions
