@@ -44,38 +44,27 @@ final class SwiftCompilerService {
     private let dylibURL: URL = FileManager.default.temporaryDirectory
         .appendingPathComponent("quickicons-usericon.dylib")
 
-    // SDK path and swiftc path are resolved lazily on first compile (off the main thread
-    // via async context) to avoid blocking MainActor during init with synchronous xcrun calls.
-    private var _sdkPath: String?
-    private var _swiftcPath: String?
+    // Resolved lazily on first compile (off the main thread via async context)
+    // to avoid blocking MainActor during init with synchronous xcrun calls.
+    private var sdkPath: String?
+    private var swiftcPath: String?
 
     init() {}
-
-    /// Resolves and caches the SDK path and swiftc path on first use.
-    private func resolveToolchainPaths() async {
-        if _sdkPath == nil {
-            _sdkPath = await Task.detached { Self.resolveSDKPath() }.value
-        }
-        if _swiftcPath == nil {
-            _swiftcPath = await Task.detached { Self.resolveSwiftcPath() }.value
-        }
-    }
 
     // MARK: - Public API
 
     /// Compiles `source` to a dylib, returning `.success(dylibURL)` on success or
     /// `.failure(diagnostics)` when swiftc reports errors.
     func compile(source: String) async -> CompilationResult {
-        // Resolve toolchain paths lazily on first compile — avoids blocking MainActor at init.
-        await resolveToolchainPaths()
-
-        let sdkPath = _sdkPath ?? ""
-        let swiftcPath = _swiftcPath ?? "/usr/bin/swiftc"
+        if sdkPath == nil {
+            sdkPath = await Task.detached { Self.resolveSDKPath() }.value
+        }
+        if swiftcPath == nil {
+            swiftcPath = await Task.detached { Self.resolveSwiftcPath() }.value
+        }
 
         let fm = FileManager.default
-
-        // Write the augmented source to a temp file.
-        let sourceURL = FileManager.default.temporaryDirectory
+        let sourceURL = fm.temporaryDirectory
             .appendingPathComponent("quickicons-usericon-\(UUID().uuidString).swift")
 
         let augmented = source + "\n" + bridgeSource
@@ -89,18 +78,17 @@ final class SwiftCompilerService {
         }
         defer { try? fm.removeItem(at: sourceURL) }
 
-        // Remove a previous dylib if present.
         if fm.fileExists(atPath: dylibURL.path) {
             try? fm.removeItem(at: dylibURL)
         }
 
         let args: [String] = [
-            swiftcPath,
+            swiftcPath ?? "/usr/bin/swiftc",
             "-emit-library",
             "-o", dylibURL.path,
             "-module-name", "UserIcon",
             sourceURL.path,
-            "-sdk", sdkPath,
+            "-sdk", sdkPath ?? "",
             "-target", "arm64-apple-macosx15.0",
         ]
 
@@ -109,8 +97,7 @@ final class SwiftCompilerService {
         if exitCode == 0 {
             return .success(dylibURL: dylibURL)
         } else {
-            let diagnostics = parseStderr(stderr, sourceFilePath: sourceURL.path)
-            return .failure(diagnostics: diagnostics)
+            return .failure(diagnostics: parseStderr(stderr))
         }
     }
 
@@ -132,9 +119,8 @@ public func _quickIconsMakeView(_ size: Double) -> UnsafeMutableRawPointer {
 
     /// Parses swiftc stderr, extracting structured diagnostics.
     /// Expected format: `<file>:<line>:<column>: <severity>: <message>`
-    func parseStderr(_ stderr: String, sourceFilePath: String = "") -> [SwiftDiagnostic] {
-        // Regex: anything up to :line:column: severity: message
-        // We match on any path prefix so tests can pass arbitrary stderr strings.
+    func parseStderr(_ stderr: String) -> [SwiftDiagnostic] {
+        // Match on any path prefix so tests can pass arbitrary stderr strings.
         let pattern = #"^.*:(\d+):(\d+): (error|warning|note): (.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return []
