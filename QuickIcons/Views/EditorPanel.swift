@@ -7,7 +7,6 @@ struct EditorPanel: View {
 
     var body: some View {
         STTextViewRepresentable(text: $sourceCode, showsInvisibles: showsInvisibles, fontSize: fontSize)
-            .frame(minWidth: 420)
     }
 }
 

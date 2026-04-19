@@ -12,12 +12,12 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
 
     private static let cachedSDKPath: String? = Self.resolveSDKPath()
 
-    nonisolated init() {}
+    init() {}
 
     /// Returns diagnostics for `source`. Writes `source` to a temporary file and queries
     /// SourceKit's dedicated diagnostics request with the system Swift SDK.
     /// Returns an empty array on any SourceKit failure.
-    nonisolated func diagnostics(for source: String) async -> [SwiftDiagnostic] {
+    func diagnostics(for source: String) async -> [SwiftDiagnostic] {
         guard !source.isEmpty else { return [] }
 
         guard let tmpURL = writeTempFile(source) else { return [] }
@@ -37,11 +37,9 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
 
     // MARK: - Private helpers
 
-    /// Builds a `source.request.diagnostics` YAML request for the given file path.
-    ///
-    /// `source.request.diagnostics` is the SourceKit request dedicated to returning
-    /// type-checking diagnostics synchronously. It requires the file to exist on disk.
-    private nonisolated func buildDiagnosticsYAMLRequest(
+    /// `source.request.diagnostics` requires the file to exist on disk and returns
+    /// type-checking diagnostics synchronously.
+    private func buildDiagnosticsYAMLRequest(
         path: String,
         compilerArgs: [String]
     ) -> String {
@@ -65,9 +63,9 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         """
     }
 
-    private nonisolated func writeTempFile(_ source: String) -> URL? {
-        let tmpDir = FileManager.default.temporaryDirectory
-        let url = tmpDir.appendingPathComponent("SourceKitDiag-\(UUID().uuidString).swift")
+    private func writeTempFile(_ source: String) -> URL? {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SourceKitDiag-\(UUID().uuidString).swift")
         do {
             try source.write(to: url, atomically: true, encoding: .utf8)
             return url
@@ -76,7 +74,7 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         }
     }
 
-    private nonisolated static func resolveSDKPath() -> String? {
+    private static func resolveSDKPath() -> String? {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         task.arguments = ["--show-sdk-path", "--sdk", "macosx"]
@@ -93,17 +91,17 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         }
     }
 
-    private nonisolated func buildCompilerArgs(path: String, sdkPath: String?) -> [String] {
+    private func buildCompilerArgs(path: String, sdkPath: String?) -> [String] {
         var args: [String] = [path]
-        if let sdk = sdkPath {
-            args += ["-sdk", sdk]
+        if let sdkPath {
+            args += ["-sdk", sdkPath]
         }
         args += ["-target", "arm64-apple-macosx15.0"]
         args += ["-module-name", "UserIcon"]
         return args
     }
 
-    private nonisolated func parseDiagnostics(
+    private func parseDiagnostics(
         from response: [String: SourceKitRepresentable]
     ) -> [SwiftDiagnostic] {
         guard let rawDiagnostics = response["key.diagnostics"] as? [[String: SourceKitRepresentable]] else {
@@ -112,7 +110,7 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         return rawDiagnostics.compactMap { parseDiagnostic(from: $0) }
     }
 
-    private nonisolated func parseDiagnostic(from dict: [String: SourceKitRepresentable]) -> SwiftDiagnostic? {
+    private func parseDiagnostic(from dict: [String: SourceKitRepresentable]) -> SwiftDiagnostic? {
         guard
             let message = dict["key.description"] as? String,
             let line = dict["key.line"] as? Int64,
@@ -122,16 +120,15 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
             return nil
         }
 
-        let severity = parseSeverity(severityUID)
         return SwiftDiagnostic(
             line: Int(line),
             column: Int(column),
-            severity: severity,
+            severity: parseSeverity(severityUID),
             message: message
         )
     }
 
-    private nonisolated func parseSeverity(_ uid: String) -> SwiftDiagnostic.Severity {
+    private func parseSeverity(_ uid: String) -> SwiftDiagnostic.Severity {
         if uid.hasSuffix(".error") { return .error }
         if uid.hasSuffix(".warning") { return .warning }
         return .note
