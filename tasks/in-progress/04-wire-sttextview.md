@@ -1,6 +1,6 @@
 ---
 dependencies: [01-add-spm-dependencies, 02-basic-editor-ui-layout]
-status: backlog
+status: in-progress
 ---
 
 # Wire STTextView into EditorPanel
@@ -25,3 +25,7 @@ STTextView is an AppKit component; wrap it in `NSViewRepresentable` or use its p
 The coordinator/delegate for the SwiftUI bridge should update the `Binding<String>` on every text change via `textDidChange` or the equivalent STTextView delegate callback.
 
 Do not configure any plugins (Neon, Annotations) in this task — leave plugin setup points as empty arrays or commented stubs so tasks 05 and 08 can add them cleanly.
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/5
