@@ -1,6 +1,7 @@
 ---
 dependencies: [04-wire-sttextview]
-status: backlog
+status: in-review
+pr: https://github.com/natikgadzhi/quick-icons/pull/41
 ---
 
 # Auto-Indent on Newline
