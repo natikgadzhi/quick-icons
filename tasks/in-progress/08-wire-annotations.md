@@ -1,6 +1,7 @@
 ---
 dependencies: [04-wire-sttextview, 05-syntax-highlighting, 07-sourcekit-diagnostics-service]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/15
 ---
 
 # Wire SourceKit Diagnostics to Plugin-Annotations
@@ -29,3 +30,7 @@ Wire up in `EditorPanel` (or its representable wrapper):
 5. Apply annotations to the STTextView plugin
 
 Use Swift structured concurrency (`Task`, `@MainActor`) for the debounce — avoid `DispatchWorkItem` or `Timer`. A `@State var diagnosticsTask: Task<Void, Never>?` in the view or coordinator is the right pattern: cancel the previous task, then assign a new one on each text change.
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/15

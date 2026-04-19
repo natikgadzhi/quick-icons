@@ -2,11 +2,13 @@ import AppKit
 import SwiftUI
 import STTextView
 import STPluginNeon
+import STAnnotationsPlugin
 import TreeSitterResource
 
 /// NSViewRepresentable wrapper around STTextView.
 /// Provides a two-way binding to a plain-text String, a monospaced font,
-/// a visible line-number gutter, and Swift syntax highlighting via Plugin-Neon.
+/// a visible line-number gutter, Swift syntax highlighting via Plugin-Neon,
+/// and inline diagnostics annotations via Plugin-Annotations.
 struct STTextViewRepresentable: NSViewRepresentable {
     @Binding var text: String
 
@@ -39,6 +41,13 @@ struct STTextViewRepresentable: NSViewRepresentable {
         // (uses NSColor asset catalog entries that adapt to light/dark mode).
         textView.addPlugin(NeonPlugin(theme: .default, language: .swift))
 
+        // Inline diagnostics via Plugin-Annotations.
+        // The coordinator acts as data source; we keep a reference so the
+        // coordinator can call reloadAnnotations() after updating its array.
+        let annotationsPlugin = STAnnotationsPlugin(dataSource: context.coordinator)
+        context.coordinator.annotationsPlugin = annotationsPlugin
+        textView.addPlugin(annotationsPlugin)
+
         // Set initial content
         textView.text = text
 
@@ -59,15 +68,35 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
     // MARK: - Coordinator
 
-    final class Coordinator: NSObject, STTextViewDelegate {
+    @MainActor
+    final class Coordinator: NSObject, STTextViewDelegate, STAnnotationsDataSource {
         var text: Binding<String>
+
         /// Guard flag: prevents the delegate callback from writing back while
         /// updateNSView is already applying a programmatic change.
         var isUpdatingFromSwiftUI = false
 
+        /// Reference to the annotations plugin so we can trigger reloads.
+        weak var annotationsPlugin: STAnnotationsPlugin?
+
+        /// Current annotations shown in the text view.
+        var textViewAnnotations: [any STLineAnnotation] = [] {
+            didSet {
+                annotationsPlugin?.reloadAnnotations()
+            }
+        }
+
+        /// The pending diagnostics task. Cancelled and replaced on each keystroke.
+        private var diagnosticsTask: Task<Void, Never>?
+
+        /// Shared diagnostics service.
+        private let diagnosticsService = SourceKitDiagnosticsService()
+
         init(text: Binding<String>) {
             self.text = text
         }
+
+        // MARK: - STTextViewDelegate
 
         // Called by STTextView after every user edit.
         func textViewDidChangeText(_ notification: Notification) {
@@ -77,6 +106,88 @@ struct STTextViewRepresentable: NSViewRepresentable {
             if text.wrappedValue != newText {
                 text.wrappedValue = newText
             }
+
+            // Cancel any in-flight diagnostics request, then schedule a new one
+            // with a 300ms debounce using Swift structured concurrency.
+            diagnosticsTask?.cancel()
+            diagnosticsTask = Task { [weak self, weak textView] in
+                do {
+                    try await Task.sleep(for: .milliseconds(300))
+                } catch {
+                    // Task was cancelled — a newer keystroke supersedes this one.
+                    return
+                }
+
+                guard let self, !Task.isCancelled else { return }
+
+                let source = textView?.text ?? ""
+                let diagnostics = await self.diagnosticsService.diagnostics(for: source)
+
+                guard !Task.isCancelled else { return }
+
+                guard let textView else { return }
+                self.applyDiagnostics(diagnostics, to: textView)
+            }
+        }
+
+        // MARK: - Diagnostics → Annotations
+
+        private func applyDiagnostics(_ diagnostics: [SwiftDiagnostic], to textView: STTextView) {
+            let source = textView.text ?? ""
+            let annotations: [any STLineAnnotation] = diagnostics.compactMap { diagnostic in
+                guard let location = textLocation(forLine: diagnostic.line, in: source, textView: textView) else {
+                    return nil
+                }
+
+                let kind: STMessageLineAnnotation.AnnotationKind = switch diagnostic.severity {
+                case .error: .error
+                case .warning: .warning
+                case .note: .info
+                }
+
+                return STMessageLineAnnotation(
+                    id: "\(diagnostic.line):\(diagnostic.column):\(diagnostic.message)",
+                    message: AttributedString(diagnostic.message),
+                    kind: kind,
+                    location: location
+                )
+            }
+            textViewAnnotations = annotations
+        }
+
+        /// Converts a 1-based line number to an `NSTextLocation` inside the document.
+        /// Returns `nil` when the line is out of range.
+        func textLocation(
+            forLine line: Int,
+            in source: String,
+            textView: STTextView
+        ) -> (any NSTextLocation)? {
+            guard line >= 1 else { return nil }
+
+            let utf16Offset = utf16Offset(forLine: line, in: source)
+            guard utf16Offset >= 0 else { return nil }
+
+            return textView.textLayoutManager.location(
+                textView.textLayoutManager.documentRange.location,
+                offsetBy: utf16Offset
+            )
+        }
+
+        /// Returns the UTF-16 offset of the start of `line` (1-based) within `source`.
+        /// Returns `-1` when the line is out of range.
+        func utf16Offset(forLine line: Int, in source: String) -> Int {
+            guard line >= 1 else { return -1 }
+
+            var currentLine = 1
+            var utf16Count = 0
+            for char in source {
+                if currentLine == line { break }
+                if char == "\n" { currentLine += 1 }
+                utf16Count += char.utf16.count
+            }
+
+            guard currentLine == line else { return -1 }
+            return utf16Count
         }
     }
 }
