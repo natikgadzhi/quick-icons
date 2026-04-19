@@ -73,7 +73,7 @@ struct EditorView: View {
                 image: compiledImage,
                 errorMessage: compileError,
                 isCompiling: isCompiling,
-                exportMessage: exportMessage
+                exportMessage: $exportMessage
             )
             .frame(idealWidth: 300)
         }

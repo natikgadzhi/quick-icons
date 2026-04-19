@@ -5,10 +5,12 @@ struct PreviewPanel: View {
     var image: NSImage?
     var errorMessage: String?
     var isCompiling: Bool = false
-    var exportMessage: ExportMessage?
+    @Binding var exportMessage: ExportMessage?
+
+    @State private var dismissTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(spacing: 0) {
+        Group {
             if let errorMessage {
                 errorView(message: errorMessage)
             } else if let image {
@@ -16,11 +18,29 @@ struct PreviewPanel: View {
             } else {
                 emptyView()
             }
-
+        }
+        .overlay(alignment: .bottom) {
             if let exportMessage {
-                exportStatusView(message: exportMessage)
+                toastView(message: exportMessage)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .onChange(of: exportMessage) { _, newValue in
+            dismissTask?.cancel()
+            guard newValue != nil else { return }
+            dismissTask = Task {
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                        exportMessage = nil
+                    }
+                }
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: exportMessage)
     }
 
     @ViewBuilder
@@ -28,7 +48,8 @@ struct PreviewPanel: View {
         Image(nsImage: image)
             .resizable()
             .scaledToFit()
-            .padding()
+            .padding(.horizontal, 32)
+            .padding(.vertical, 16)
             .opacity(isCompiling ? 0.4 : 1.0)
             .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
@@ -75,7 +96,7 @@ struct PreviewPanel: View {
     }
 
     @ViewBuilder
-    private func exportStatusView(message: ExportMessage) -> some View {
+    private func toastView(message: ExportMessage) -> some View {
         HStack(spacing: 8) {
             switch message {
             case .success(let path):
@@ -83,7 +104,7 @@ struct PreviewPanel: View {
                     .foregroundStyle(.green)
                 Text("Exported to \(path)")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             case .error(let text):
@@ -91,29 +112,40 @@ struct PreviewPanel: View {
                     .foregroundStyle(.orange)
                 Text(text)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.bar)
     }
 }
 
 #Preview("Empty") {
-    PreviewPanel(image: nil)
+    PreviewPanel(image: nil, exportMessage: .constant(nil))
         .frame(width: 400, height: 400)
 }
 
 #Preview("Error") {
-    PreviewPanel(image: nil, errorMessage: "Error on line 14: use of unresolved identifier 'foo'")
+    PreviewPanel(image: nil, errorMessage: "Error on line 14: use of unresolved identifier 'foo'", exportMessage: .constant(nil))
         .frame(width: 400, height: 400)
 }
 
 #Preview("Compiling") {
-    PreviewPanel(image: nil, errorMessage: nil, isCompiling: true)
+    PreviewPanel(image: nil, errorMessage: nil, isCompiling: true, exportMessage: .constant(nil))
+        .frame(width: 400, height: 400)
+}
+
+#Preview("Export Success Toast") {
+    PreviewPanel(image: nil, exportMessage: .constant(.success("/Users/me/Desktop/AppIcon.appiconset")))
+        .frame(width: 400, height: 400)
+}
+
+#Preview("Export Error Toast") {
+    PreviewPanel(image: nil, exportMessage: .constant(.error("Failed to write to /tmp: permission denied")))
         .frame(width: 400, height: 400)
 }
