@@ -60,11 +60,12 @@ struct STTextViewRepresentable: NSViewRepresentable {
         // Line-number gutter
         textView.showsLineNumbers = true
 
-        // Gutter polish: separator line, current-line highlight on the
-        // gutter, and markers enabled so later breakpoint/diagnostic
-        // glyphs have somewhere to render.
+        // Gutter polish: separator line and markers enabled so later
+        // breakpoint/diagnostic glyphs have somewhere to render. The gutter's
+        // own highlightSelectedLine uses a different default color than the
+        // editor's, which produces a saturated mismatch on click — leave it
+        // off and let the editor-wide current-line highlight handle things.
         textView.gutterView?.drawSeparator = true
-        textView.gutterView?.highlightSelectedLine = true
         textView.gutterView?.areMarkersEnabled = true
 
         // Delegate for text-change callbacks
