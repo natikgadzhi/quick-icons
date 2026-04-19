@@ -129,6 +129,12 @@ struct STTextViewRepresentable: NSViewRepresentable {
         /// updateNSView is already applying a programmatic change.
         var isUpdatingFromSwiftUI = false
 
+        /// Reentrancy guard for auto-indent. While true, `shouldChangeTextIn`
+        /// passes newlines through untouched so the Coordinator-initiated
+        /// `insertText("\n" + indent)` edit reaches the document instead of
+        /// being intercepted again.
+        private var isInsertingAutoIndent = false
+
         /// Reference to the annotations plugin so we can trigger reloads.
         weak var annotationsPlugin: STAnnotationsPlugin?
 
@@ -162,6 +168,48 @@ struct STTextViewRepresentable: NSViewRepresentable {
         }
 
         // MARK: - STTextViewDelegate
+
+        /// Intercepts plain newline insertions so we can auto-indent to match
+        /// the previous line (and deepen one level after `{`).
+        ///
+        /// When the replacement string is exactly `"\n"` we compute the
+        /// indentation for the caret's line, return `false` to prevent the
+        /// default newline insertion, and then schedule our own
+        /// `insertText("\n" + indent)` edit. That single edit keeps undo
+        /// coalesced — one Cmd-Z undoes both the newline and the indent.
+        /// The `isInsertingAutoIndent` flag breaks the reentrant call so our
+        /// own insertion is not intercepted again.
+        func textView(
+            _ textView: STTextView,
+            shouldChangeTextIn affectedCharRange: NSTextRange,
+            replacementString: String?
+        ) -> Bool {
+            guard !isInsertingAutoIndent,
+                  replacementString == "\n",
+                  affectedCharRange.isEmpty else {
+                return true
+            }
+
+            let source = textView.text ?? ""
+            let utf16Offset = textView.textLayoutManager.offset(
+                from: textView.textLayoutManager.documentRange.location,
+                to: affectedCharRange.location
+            )
+            guard utf16Offset >= 0 else { return true }
+
+            let indent = AutoIndent.indent(
+                source: source,
+                insertionPointUTF16Offset: utf16Offset
+            )
+
+            // No indent to add → let STTextView perform its default newline.
+            guard !indent.isEmpty else { return true }
+
+            isInsertingAutoIndent = true
+            defer { isInsertingAutoIndent = false }
+            textView.insertText("\n" + indent, replacementRange: textView.selectedRange())
+            return false
+        }
 
         // Called by STTextView after every user edit.
         func textViewDidChangeText(_ notification: Notification) {
