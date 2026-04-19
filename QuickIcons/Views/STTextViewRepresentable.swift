@@ -11,6 +11,7 @@ import TreeSitterResource
 /// and inline diagnostics annotations via Plugin-Annotations.
 struct STTextViewRepresentable: NSViewRepresentable {
     @Binding var text: String
+    var showsInvisibles: Bool = false
 
     // MARK: - NSViewRepresentable
 
@@ -29,6 +30,18 @@ struct STTextViewRepresentable: NSViewRepresentable {
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.isHorizontallyResizable = false
 
+        // Paragraph style: give each line ~20% extra breathing room, matching
+        // Xcode's default editor density. Both STTextView demos set this knob.
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineHeightMultiple = 1.2
+        textView.defaultParagraphStyle = paragraphStyle
+
+        // Editor-level polish: incremental ⌘F, no font-panel hijack of ⌘T,
+        // and an initial state for the View → Show Invisible Characters toggle.
+        textView.isIncrementalSearchingEnabled = true
+        textView.usesFontPanel = false
+        textView.showsInvisibleCharacters = showsInvisibles
+
         // Current-line highlight: matches Xcode's default editor behavior.
         // Light: #E8F0FE (faint blue-grey); Dark: ~8% white on the dark background.
         // NSColor(name:dynamicProvider:) resolves on every appearance change without
@@ -45,6 +58,13 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
         // Line-number gutter
         textView.showsLineNumbers = true
+
+        // Gutter polish: separator line, current-line highlight on the
+        // gutter, and markers enabled so later breakpoint/diagnostic
+        // glyphs have somewhere to render.
+        textView.gutterView?.drawSeparator = true
+        textView.gutterView?.highlightSelectedLine = true
+        textView.gutterView?.areMarkersEnabled = true
 
         // Delegate for text-change callbacks
         textView.textDelegate = context.coordinator
@@ -86,6 +106,10 @@ struct STTextViewRepresentable: NSViewRepresentable {
             context.coordinator.isUpdatingFromSwiftUI = true
             textView.text = text
             context.coordinator.isUpdatingFromSwiftUI = false
+        }
+
+        if textView.showsInvisibleCharacters != showsInvisibles {
+            textView.showsInvisibleCharacters = showsInvisibles
         }
     }
 

@@ -26,6 +26,7 @@ struct QuickIconsApp: App {
             }
 
             BuildExportCommands()
+            ViewMenuCommands()
         }
     }
 
@@ -72,6 +73,7 @@ extension Notification.Name {
     static let openSwiftFileNotification = Notification.Name("QuickIcons.OpenSwiftFile")
     static let buildRequested = Notification.Name("QuickIcons.BuildRequested")
     static let exportRequested = Notification.Name("QuickIcons.ExportRequested")
+    static let toggleInvisibleCharacters = Notification.Name("QuickIcons.ToggleInvisibleCharacters")
 }
 
 // MARK: - Build / Export focused value
@@ -85,6 +87,19 @@ extension FocusedValues {
     var hasCompiledIcon: Bool? {
         get { self[HasCompiledIconKey.self] }
         set { self[HasCompiledIconKey.self] = newValue }
+    }
+}
+
+/// Key mirroring EditorView's `showsInvisibles` state so the View menu
+/// item can render its checkmark based on the currently focused scene.
+struct ShowsInvisiblesKey: FocusedValueKey {
+    typealias Value = Bool
+}
+
+extension FocusedValues {
+    var showsInvisibles: Bool? {
+        get { self[ShowsInvisiblesKey.self] }
+        set { self[ShowsInvisiblesKey.self] = newValue }
     }
 }
 
@@ -111,6 +126,35 @@ struct BuildExportCommands: Commands {
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(!(hasCompiledIcon ?? false))
+        }
+    }
+}
+
+// MARK: - View menu commands
+
+/// Adds "Show Invisible Characters" to the View menu. The checkmark mirrors
+/// EditorView's `showsInvisibles` state via a focused scene value; the action
+/// posts a notification that EditorView's `.onReceive` handler toggles.
+struct ViewMenuCommands: Commands {
+    @FocusedValue(\.showsInvisibles) private var showsInvisibles
+
+    var body: some Commands {
+        CommandGroup(after: .toolbar) {
+            Divider()
+
+            // `Toggle` inside a CommandGroup renders as a checked menu item
+            // on macOS. Writing to the binding posts the toggle notification;
+            // the getter reflects the focused scene's current state.
+            Toggle(isOn: Binding(
+                get: { showsInvisibles ?? false },
+                set: { _ in
+                    NotificationCenter.default.post(name: .toggleInvisibleCharacters, object: nil)
+                }
+            )) {
+                Text("Show Invisible Characters")
+            }
+            .keyboardShortcut("i", modifiers: [.command, .shift])
+            .disabled(showsInvisibles == nil)
         }
     }
 }
