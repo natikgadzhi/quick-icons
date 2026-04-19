@@ -142,8 +142,15 @@ struct STTextViewRepresentable: NSViewRepresentable {
         /// The pending diagnostics task. Cancelled and replaced on each keystroke.
         private var diagnosticsTask: Task<Void, Never>?
 
+        /// The pending completion task. Cancelled and replaced on each keystroke,
+        /// and automatically torn down when the Coordinator deallocates.
+        private var completionTask: Task<[any STCompletionItem]?, Never>?
+
         /// Shared diagnostics service.
         private let diagnosticsService = SourceKitDiagnosticsService()
+
+        /// Shared completion service (lazy: first call spins up sourcekitd).
+        private let completionService = SourceKitCompletionService()
 
         init(text: Binding<String>) {
             self.text = text
@@ -182,6 +189,84 @@ struct STTextViewRepresentable: NSViewRepresentable {
                 guard let textView else { return }
                 self.applyDiagnostics(diagnostics, to: textView)
             }
+
+            // Cancel any in-flight completion request and kick off STTextView's
+            // completion machinery. The delegate below awaits the owned task,
+            // which carries the 200ms debounce + sourcekitd round-trip. A new
+            // keystroke cancels the prior task; Coordinator teardown cancels it
+            // via ARC.
+            completionTask?.cancel()
+            textView.complete(self)
+        }
+
+        // MARK: - Completion
+
+        /// STTextView's async completion hook.
+        ///
+        /// Each invocation cancel-and-replaces the Coordinator-owned
+        /// `completionTask`, which runs the 200ms debounce and sourcekitd
+        /// round-trip. The delegate awaits that task's value so STTextView
+        /// receives a fresh, debounced result per keystroke. Returning `nil`
+        /// or `[]` dismisses the popup.
+        func textView(
+            _ textView: STTextView,
+            completionItemsAtLocation location: any NSTextLocation
+        ) async -> [any STCompletionItem]? {
+            let source = textView.text ?? ""
+            let utf16Offset = textView.textLayoutManager.offset(
+                from: textView.textLayoutManager.documentRange.location,
+                to: location
+            )
+            guard utf16Offset >= 0 else { return nil }
+            let byteOffset = utf8ByteOffset(forUTF16Offset: utf16Offset, in: source)
+
+            completionTask?.cancel()
+            let task = Task { [weak self] () -> [any STCompletionItem]? in
+                // 200ms debounce — matches the spec; diagnostics use 700ms because
+                // error annotations are higher-cost/noisier than a completion list.
+                do {
+                    try await Task.sleep(for: .milliseconds(200))
+                } catch {
+                    return nil
+                }
+                if Task.isCancelled { return nil }
+                guard let self else { return nil }
+
+                do {
+                    let items = try await self.completionService.complete(
+                        source: source,
+                        offset: byteOffset
+                    )
+                    if Task.isCancelled { return nil }
+                    return items.map { SwiftCompletionListItem(item: $0) }
+                } catch {
+                    return nil
+                }
+            }
+            completionTask = task
+            return await task.value
+        }
+
+        /// Converts a UTF-16 code-unit offset (what `NSTextLayoutManager.offset`
+        /// returns) into the UTF-8 byte offset SourceKit expects.
+        private func utf8ByteOffset(forUTF16Offset utf16Offset: Int, in source: String) -> Int {
+            guard utf16Offset > 0 else { return 0 }
+            guard let endIndex = source.utf16.index(
+                source.utf16.startIndex,
+                offsetBy: utf16Offset,
+                limitedBy: source.utf16.endIndex
+            ) else {
+                return source.utf8.count
+            }
+            // Convert the UTF-16 index to a String.Index; fall back to the
+            // full string if the offset lands mid-surrogate.
+            guard let strIndex = endIndex.samePosition(in: source) else {
+                return source.utf8.count
+            }
+            guard let utf8Index = strIndex.samePosition(in: source.utf8) else {
+                return source.utf8.count
+            }
+            return source.utf8.distance(from: source.utf8.startIndex, to: utf8Index)
         }
 
         // MARK: - Diagnostics → Annotations
