@@ -1,6 +1,7 @@
 ---
 dependencies: [18-open-swift-file]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/34
 ---
 
 # Wire Build and Export to File Menu (with Icons)
