@@ -1,6 +1,7 @@
 ---
 dependencies: []
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/36
 ---
 
 # Enable Free STTextView Polish Knobs
