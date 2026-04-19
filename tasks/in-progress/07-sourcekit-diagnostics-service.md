@@ -1,6 +1,7 @@
 ---
 dependencies: [01-add-spm-dependencies]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/8
 ---
 
 # SourceKitDiagnosticsService
