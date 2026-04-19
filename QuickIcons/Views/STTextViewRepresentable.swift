@@ -155,11 +155,12 @@ struct STTextViewRepresentable: NSViewRepresentable {
             }
 
             // Cancel any in-flight diagnostics request, then schedule a new one
-            // with a 300ms debounce using Swift structured concurrency.
+            // with a 700ms debounce. Long enough to absorb a `.` plus the next
+            // identifier character without flashing a spurious error.
             diagnosticsTask?.cancel()
             diagnosticsTask = Task { [weak self, weak textView] in
                 do {
-                    try await Task.sleep(for: .milliseconds(300))
+                    try await Task.sleep(for: .milliseconds(700))
                 } catch {
                     // Task was cancelled — a newer keystroke supersedes this one.
                     return
