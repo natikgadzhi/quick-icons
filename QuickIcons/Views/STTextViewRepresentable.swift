@@ -139,6 +139,11 @@ struct STTextViewRepresentable: NSViewRepresentable {
             }
         }
 
+        /// Line numbers (1-based) for gutter markers we installed from the
+        /// latest diagnostics batch. Tracked separately so subsequent updates
+        /// can remove only our markers without clobbering any user-added ones.
+        private var diagnosticMarkerLines: Set<Int> = []
+
         /// The pending diagnostics task. Cancelled and replaced on each keystroke.
         private var diagnosticsTask: Task<Void, Never>?
 
@@ -292,6 +297,47 @@ struct STTextViewRepresentable: NSViewRepresentable {
                 )
             }
             textViewAnnotations = annotations
+
+            applyGutterMarkers(for: diagnostics, to: textView)
+        }
+
+        /// Installs a colored dot marker in the gutter for each diagnostic line.
+        /// The most severe diagnostic on a given line wins (error > warning > note).
+        /// Markers from the previous batch are removed before the new ones are
+        /// installed, so the pass is idempotent across keystrokes.
+        private func applyGutterMarkers(for diagnostics: [SwiftDiagnostic], to textView: STTextView) {
+            guard let gutter = textView.gutterView else { return }
+
+            // Remove markers we installed on the prior pass. User-installed
+            // markers (e.g. from clicking the gutter) are untouched because
+            // we only remove lines we own.
+            for line in diagnosticMarkerLines {
+                gutter.removeMarker(lineNumber: line)
+            }
+            diagnosticMarkerLines.removeAll(keepingCapacity: true)
+
+            // Pick the most severe diagnostic per line.
+            var worstByLine: [Int: SwiftDiagnostic.Severity] = [:]
+            for diagnostic in diagnostics where diagnostic.line >= 1 {
+                let current = worstByLine[diagnostic.line]
+                if current == nil || severityRank(diagnostic.severity) > severityRank(current!) {
+                    worstByLine[diagnostic.line] = diagnostic.severity
+                }
+            }
+
+            for (line, severity) in worstByLine {
+                let markerView = DiagnosticMarkerView(severity: severity)
+                gutter.addMarker(STGutterMarker(lineNumber: line, view: markerView))
+                diagnosticMarkerLines.insert(line)
+            }
+        }
+
+        private func severityRank(_ severity: SwiftDiagnostic.Severity) -> Int {
+            switch severity {
+            case .error: return 2
+            case .warning: return 1
+            case .note: return 0
+            }
         }
 
         /// Converts a 1-based line number to an `NSTextLocation` inside the document.
@@ -328,5 +374,44 @@ struct STTextViewRepresentable: NSViewRepresentable {
             guard currentLine == line else { return -1 }
             return utf16Count
         }
+    }
+}
+
+/// Gutter marker view drawn as a filled colored circle — red for errors,
+/// orange for warnings, gray for notes. Centered within the bounds the
+/// gutter allocates for the marker.
+private final class DiagnosticMarkerView: NSView {
+    private let fillColor: NSColor
+
+    init(severity: SwiftDiagnostic.Severity) {
+        self.fillColor = switch severity {
+        case .error: .systemRed
+        case .warning: .systemOrange
+        case .note: .systemGray
+        }
+        super.init(frame: .zero)
+        wantsLayer = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        // Draw a circle that fits the shorter edge, centered in the allotted box.
+        let diameter = min(bounds.width, bounds.height) - 2
+        guard diameter > 0 else { return }
+        let rect = NSRect(
+            x: bounds.midX - diameter / 2,
+            y: bounds.midY - diameter / 2,
+            width: diameter,
+            height: diameter
+        )
+        fillColor.setFill()
+        NSBezierPath(ovalIn: rect).fill()
     }
 }
