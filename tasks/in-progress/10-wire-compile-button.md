@@ -1,6 +1,7 @@
 ---
 dependencies: [02-basic-editor-ui-layout, 06-swift-compiler-service, 09-icon-preview-service]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/14
 ---
 
 # Wire Compile Button to Compiler and Preview Panel

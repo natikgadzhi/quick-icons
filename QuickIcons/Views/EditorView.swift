@@ -4,7 +4,7 @@ import SwiftUI
 private let defaultSourceCode = """
 import SwiftUI
 
-struct ScrapesBookIconView: View {
+struct IconView: View {
     var size: CGFloat
 
     var body: some View {
@@ -54,26 +54,67 @@ extension Color {
 struct EditorView: View {
     @State private var sourceCode: String = defaultSourceCode
     @State private var compiledImage: NSImage?
+    @State private var compileError: String?
+    @State private var isCompiling = false
+
+    private let compiler = SwiftCompilerService()
+    private let previewer = IconPreviewService()
 
     var body: some View {
         HSplitView {
             EditorPanel(sourceCode: $sourceCode)
-            PreviewPanel(image: compiledImage)
+                .frame(idealWidth: 600)
+            PreviewPanel(
+                image: compiledImage,
+                errorMessage: compileError,
+                isCompiling: isCompiling
+            )
+            .frame(idealWidth: 300)
         }
         .frame(minWidth: 800, minHeight: 500)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Compile") {
-                    // TODO: wire up compile action in a later task
+                Button {
+                    Task { await compile() }
+                } label: {
+                    Label(
+                        isCompiling ? "Building…" : "Build",
+                        systemImage: isCompiling ? "hammer" : "hammer.fill"
+                    )
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isCompiling)
             }
             ToolbarItem(placement: .primaryAction) {
-                Button("Export") {
+                Button {
                     // TODO: wire up export action in a later task
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
                 }
             }
         }
+    }
+
+    private func compile() async {
+        isCompiling = true
+        compiledImage = nil
+        compileError = nil
+
+        let result = await compiler.compile(source: sourceCode)
+
+        switch result {
+        case .success(let dylibURL):
+            compiledImage = previewer.render(dylibURL: dylibURL, size: 400)
+        case .failure(let diagnostics):
+            compiledImage = nil
+            if let first = diagnostics.first(where: { $0.severity == .error }) ?? diagnostics.first {
+                compileError = "Error on line \(first.line): \(first.message)"
+            } else {
+                compileError = "Compilation failed with unknown error."
+            }
+        }
+
+        isCompiling = false
     }
 }
 
