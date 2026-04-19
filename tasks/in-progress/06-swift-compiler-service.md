@@ -1,6 +1,7 @@
 ---
 dependencies: [03-disable-sandbox-entitlements]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/6
 ---
 
 # SwiftCompilerService
