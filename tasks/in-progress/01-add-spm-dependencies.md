@@ -1,6 +1,6 @@
 ---
 dependencies: []
-status: backlog
+status: in-progress
 ---
 
 # Add SPM Dependencies
@@ -33,3 +33,8 @@ Add all third-party Swift packages needed for the live icon editor feature to th
 - STTextView targets macOS 14+; verify it is compatible with our macOS 26.4 deployment target
 - SourceKittenFramework links against `sourcekitd.framework` — verify this is available on macOS without special setup
 - Do not import these packages anywhere yet; this task is setup only
+- STTextView-Plugin-Annotations depends on `STTextView branch: main` — incompatible with stable version requirements, so STTextView and Plugin-Neon are also pinned to `branch: main`
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/3
