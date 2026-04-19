@@ -120,15 +120,13 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
                 guard let self, !Task.isCancelled else { return }
 
-                let source = await MainActor.run { textView?.text ?? "" }
+                let source = textView?.text ?? ""
                 let diagnostics = await self.diagnosticsService.diagnostics(for: source)
 
                 guard !Task.isCancelled else { return }
 
-                await MainActor.run {
-                    guard let textView else { return }
-                    self.applyDiagnostics(diagnostics, to: textView)
-                }
+                guard let textView else { return }
+                self.applyDiagnostics(diagnostics, to: textView)
             }
         }
 
@@ -159,28 +157,37 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
         /// Converts a 1-based line number to an `NSTextLocation` inside the document.
         /// Returns `nil` when the line is out of range.
-        private func textLocation(
+        func textLocation(
             forLine line: Int,
             in source: String,
             textView: STTextView
         ) -> (any NSTextLocation)? {
             guard line >= 1 else { return nil }
 
-            // Find the character offset of the start of the given line (1-based).
-            var currentLine = 1
-            var characterOffset = 0
-            for character in source {
-                if currentLine == line { break }
-                if character == "\n" { currentLine += 1 }
-                characterOffset += 1
-            }
-
-            guard currentLine == line else { return nil }
+            let utf16Offset = utf16Offset(forLine: line, in: source)
+            guard utf16Offset >= 0 else { return nil }
 
             return textView.textLayoutManager.location(
                 textView.textLayoutManager.documentRange.location,
-                offsetBy: characterOffset
+                offsetBy: utf16Offset
             )
+        }
+
+        /// Returns the UTF-16 offset of the start of `line` (1-based) within `source`.
+        /// Returns `-1` when the line is out of range.
+        func utf16Offset(forLine line: Int, in source: String) -> Int {
+            guard line >= 1 else { return -1 }
+
+            var currentLine = 1
+            var utf16Count = 0
+            for char in source {
+                if currentLine == line { break }
+                if char == "\n" { currentLine += 1 }
+                utf16Count += char.utf16.count
+            }
+
+            guard currentLine == line else { return -1 }
+            return utf16Count
         }
     }
 }
