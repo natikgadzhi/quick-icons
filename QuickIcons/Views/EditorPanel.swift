@@ -2,9 +2,10 @@ import SwiftUI
 
 struct EditorPanel: View {
     @Binding var sourceCode: String
+    var showsInvisibles: Bool = false
 
     var body: some View {
-        STTextViewRepresentable(text: $sourceCode)
+        STTextViewRepresentable(text: $sourceCode, showsInvisibles: showsInvisibles)
             .frame(minWidth: 420)
     }
 }

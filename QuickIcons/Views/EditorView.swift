@@ -60,6 +60,7 @@ struct EditorView: View {
     @State private var compiledDylibURL: URL?
     @State private var exportMessage: ExportMessage?
     @State private var hasCompiledIcon = false
+    @State private var showsInvisibles = false
 
     private let compiler = SwiftCompilerService()
     private let previewer = IconPreviewService()
@@ -67,7 +68,7 @@ struct EditorView: View {
 
     var body: some View {
         HSplitView {
-            EditorPanel(sourceCode: $sourceCode)
+            EditorPanel(sourceCode: $sourceCode, showsInvisibles: showsInvisibles)
                 .frame(minWidth: 420, idealWidth: 720, maxWidth: .infinity)
             PreviewPanel(
                 image: compiledImage,
@@ -80,6 +81,7 @@ struct EditorView: View {
         .frame(minWidth: 1080, minHeight: 500)
         .onChange(of: sourceCode) { hasCompiledIcon = false }
         .focusedSceneValue(\.hasCompiledIcon, hasCompiledIcon)
+        .focusedSceneValue(\.showsInvisibles, showsInvisibles)
         .onReceive(NotificationCenter.default.publisher(for: .openSwiftFileNotification)) { notification in
             if let source = notification.userInfo?[OpenSwiftFileNotification.sourceKey] as? String {
                 sourceCode = source
@@ -91,6 +93,9 @@ struct EditorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .exportRequested)) { _ in
             guard hasCompiledIcon else { return }
             export()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleInvisibleCharacters)) { _ in
+            showsInvisibles.toggle()
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
