@@ -2,7 +2,8 @@
 //  QuickIconsUITestsLaunchTests.swift
 //  QuickIconsUITests
 //
-//  Created by Natik Gadzhi on 4/19/26.
+//  Disabled: launches the app and takes a screenshot, which steals focus.
+//  Re-enable when ready for full UI automation.
 //
 
 import XCTest
@@ -17,19 +18,14 @@ final class QuickIconsUITestsLaunchTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    @MainActor
-    func testLaunch() throws {
-        let app = XCUIApplication()
-        app.launch()
-
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
-
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Launch Screen"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
+//    @MainActor
+//    func testLaunch() throws {
+//        let app = XCUIApplication()
+//        app.launch()
+//
+//        let attachment = XCTAttachment(screenshot: app.screenshot())
+//        attachment.name = "Launch Screen"
+//        attachment.lifetime = .keepAlways
+//        add(attachment)
+//    }
 }
