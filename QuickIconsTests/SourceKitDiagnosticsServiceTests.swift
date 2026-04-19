@@ -22,10 +22,9 @@ struct SourceKitDiagnosticsServiceTests {
     }
 
     /// Verifies the service never throws — an empty string is safe to pass.
-    @Test func emptySourceDoesNotCrash() async {
+    @Test func emptySourceReturnsEmpty() async {
         let service = SourceKitDiagnosticsService()
         let diagnostics = await service.diagnostics(for: "")
-        // May or may not be empty — just must not crash.
-        _ = diagnostics
+        #expect(diagnostics.isEmpty)
     }
 }

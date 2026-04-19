@@ -10,7 +10,9 @@ import SourceKittenFramework
 /// The service never throws to the caller — any internal SourceKit failure returns an empty array.
 nonisolated struct SourceKitDiagnosticsService: Sendable {
 
-    public nonisolated init() {}
+    private static let cachedSDKPath: String? = Self.resolveSDKPath()
+
+    nonisolated init() {}
 
     /// Returns diagnostics for `source`. Writes `source` to a temporary file and queries
     /// SourceKit's dedicated diagnostics request with the system Swift SDK.
@@ -22,8 +24,7 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         defer { try? FileManager.default.removeItem(at: tmpURL) }
 
         let path = tmpURL.path
-        let sdkPath = getSDKPath()
-        let compilerArgs = buildCompilerArgs(path: path, sdkPath: sdkPath)
+        let compilerArgs = buildCompilerArgs(path: path, sdkPath: Self.cachedSDKPath)
         let yaml = buildDiagnosticsYAMLRequest(path: path, compilerArgs: compilerArgs)
 
         do {
@@ -75,7 +76,7 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         }
     }
 
-    private nonisolated func getSDKPath() -> String? {
+    private nonisolated static func resolveSDKPath() -> String? {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         task.arguments = ["--show-sdk-path", "--sdk", "macosx"]
@@ -97,7 +98,7 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         if let sdk = sdkPath {
             args += ["-sdk", sdk]
         }
-        args += ["-target", "arm64-apple-macos13.0"]
+        args += ["-target", "arm64-apple-macosx15.0"]
         args += ["-module-name", "UserIcon"]
         return args
     }
