@@ -68,14 +68,14 @@ struct EditorView: View {
     var body: some View {
         HSplitView {
             EditorPanel(sourceCode: $sourceCode)
-                .frame(minWidth: 400, idealWidth: 720, maxWidth: .infinity)
+                .frame(minWidth: 420, idealWidth: 720, maxWidth: .infinity)
             PreviewPanel(
                 image: compiledImage,
                 errorMessage: compileError,
                 isCompiling: isCompiling,
                 exportMessage: $exportMessage
             )
-            .frame(minWidth: 280, idealWidth: 360, maxWidth: .infinity)
+            .frame(minWidth: 300, idealWidth: 360, maxWidth: .infinity)
         }
         .frame(minWidth: 1080, minHeight: 500)
         .onChange(of: sourceCode) { hasCompiledIcon = false }
