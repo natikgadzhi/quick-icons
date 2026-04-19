@@ -74,15 +74,22 @@ struct EditorView: View {
         .frame(minWidth: 800, minHeight: 500)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(isCompiling ? "Compiling…" : "Compile") {
+                Button {
                     Task { await compile() }
+                } label: {
+                    Label(
+                        isCompiling ? "Building…" : "Build",
+                        systemImage: isCompiling ? "hammer" : "hammer.fill"
+                    )
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isCompiling)
             }
             ToolbarItem(placement: .primaryAction) {
-                Button("Export") {
+                Button {
                     // TODO: wire up export action in a later task
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
                 }
             }
         }
