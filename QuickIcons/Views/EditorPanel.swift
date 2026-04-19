@@ -3,9 +3,10 @@ import SwiftUI
 struct EditorPanel: View {
     @Binding var sourceCode: String
     var showsInvisibles: Bool = false
+    var fontSize: CGFloat = 13
 
     var body: some View {
-        STTextViewRepresentable(text: $sourceCode, showsInvisibles: showsInvisibles)
+        STTextViewRepresentable(text: $sourceCode, showsInvisibles: showsInvisibles, fontSize: fontSize)
             .frame(minWidth: 420)
     }
 }

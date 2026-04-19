@@ -12,6 +12,7 @@ import TreeSitterResource
 struct STTextViewRepresentable: NSViewRepresentable {
     @Binding var text: String
     var showsInvisibles: Bool = false
+    var fontSize: CGFloat = 13
 
     // MARK: - NSViewRepresentable
 
@@ -27,7 +28,7 @@ struct STTextViewRepresentable: NSViewRepresentable {
         }
 
         // Appearance
-        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         textView.isHorizontallyResizable = false
 
         // Paragraph style: give each line ~20% extra breathing room, matching
@@ -110,6 +111,10 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
         if textView.showsInvisibleCharacters != showsInvisibles {
             textView.showsInvisibleCharacters = showsInvisibles
+        }
+
+        if textView.font.pointSize != fontSize {
+            textView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         }
     }
 

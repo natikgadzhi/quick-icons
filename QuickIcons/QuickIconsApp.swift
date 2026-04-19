@@ -74,6 +74,9 @@ extension Notification.Name {
     static let buildRequested = Notification.Name("QuickIcons.BuildRequested")
     static let exportRequested = Notification.Name("QuickIcons.ExportRequested")
     static let toggleInvisibleCharacters = Notification.Name("QuickIcons.ToggleInvisibleCharacters")
+    static let zoomIn = Notification.Name("QuickIcons.ZoomIn")
+    static let zoomOut = Notification.Name("QuickIcons.ZoomOut")
+    static let resetZoom = Notification.Name("QuickIcons.ResetZoom")
 }
 
 // MARK: - Build / Export focused value
@@ -155,6 +158,23 @@ struct ViewMenuCommands: Commands {
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
             .disabled(showsInvisibles == nil)
+
+            Divider()
+
+            Button("Zoom In") {
+                NotificationCenter.default.post(name: .zoomIn, object: nil)
+            }
+            .keyboardShortcut("+", modifiers: .command)
+
+            Button("Zoom Out") {
+                NotificationCenter.default.post(name: .zoomOut, object: nil)
+            }
+            .keyboardShortcut("-", modifiers: .command)
+
+            Button("Actual Size") {
+                NotificationCenter.default.post(name: .resetZoom, object: nil)
+            }
+            .keyboardShortcut("0", modifiers: .command)
         }
     }
 }

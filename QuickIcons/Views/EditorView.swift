@@ -61,6 +61,7 @@ struct EditorView: View {
     @State private var exportMessage: ExportMessage?
     @State private var hasCompiledIcon = false
     @State private var showsInvisibles = false
+    @State private var fontSize: CGFloat = 13
 
     private let compiler = SwiftCompilerService()
     private let previewer = IconPreviewService()
@@ -69,7 +70,7 @@ struct EditorView: View {
     var body: some View {
         GeometryReader { proxy in
             HSplitView {
-                EditorPanel(sourceCode: $sourceCode, showsInvisibles: showsInvisibles)
+                EditorPanel(sourceCode: $sourceCode, showsInvisibles: showsInvisibles, fontSize: fontSize)
                     .frame(
                         minWidth: 420,
                         idealWidth: proxy.size.width * 2 / 3,
@@ -106,6 +107,15 @@ struct EditorView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleInvisibleCharacters)) { _ in
             showsInvisibles.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in
+            fontSize = min(fontSize + 1, 36)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in
+            fontSize = max(fontSize - 1, 9)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .resetZoom)) { _ in
+            fontSize = 13
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
