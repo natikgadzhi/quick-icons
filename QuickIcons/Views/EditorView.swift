@@ -105,12 +105,9 @@ struct EditorView: View {
         switch result {
         case .success(let dylibURL):
             compiledImage = previewer.render(dylibURL: dylibURL, size: 400)
-            compileError = nil
         case .failure(let diagnostics):
             compiledImage = nil
-            if let first = diagnostics.first(where: { $0.severity == .error }) {
-                compileError = "Error on line \(first.line): \(first.message)"
-            } else if let first = diagnostics.first {
+            if let first = diagnostics.first(where: { $0.severity == .error }) ?? diagnostics.first {
                 compileError = "Error on line \(first.line): \(first.message)"
             } else {
                 compileError = "Compilation failed with unknown error."
