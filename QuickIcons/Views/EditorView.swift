@@ -79,6 +79,11 @@ struct EditorView: View {
         }
         .frame(minWidth: 800, minHeight: 500)
         .onChange(of: sourceCode) { hasCompiledIcon = false }
+        .onReceive(NotificationCenter.default.publisher(for: .openSwiftFileNotification)) { notification in
+            if let source = notification.userInfo?[OpenSwiftFileNotification.sourceKey] as? String {
+                sourceCode = source
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
