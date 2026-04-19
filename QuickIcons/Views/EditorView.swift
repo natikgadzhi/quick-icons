@@ -63,11 +63,13 @@ struct EditorView: View {
     var body: some View {
         HSplitView {
             EditorPanel(sourceCode: $sourceCode)
+                .frame(idealWidth: 600)
             PreviewPanel(
                 image: compiledImage,
                 errorMessage: compileError,
                 isCompiling: isCompiling
             )
+            .frame(idealWidth: 300)
         }
         .frame(minWidth: 800, minHeight: 500)
         .toolbar {
