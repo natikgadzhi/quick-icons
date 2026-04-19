@@ -1,7 +1,11 @@
 ---
 dependencies: [06-swift-compiler-service, 25-expand-xcode-theme]
-status: backlog
+status: in-progress
 ---
+
+## Pull Requests
+
+- Stage 1 (service + tests): https://github.com/natikgadzhi/quick-icons/pull/37
 
 # SourceKit-backed Code Completion
 
