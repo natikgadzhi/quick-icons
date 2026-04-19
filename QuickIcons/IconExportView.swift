@@ -3,6 +3,7 @@
 //  QuickIcons
 //
 
+import AppKit
 import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
@@ -62,11 +63,20 @@ struct IconExportView: View {
     private func exportSelectedIcon() async {
         guard !isExporting else { return }
 
+        let panel = NSOpenPanel()
+        panel.title = "Choose Export Directory"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Export Here"
+
+        guard panel.runModal() == .OK, let baseURL = panel.url else { return }
+
         isExporting = true
         defer { isExporting = false }
 
         do {
-            let destination = try exportIconSet(for: selectedIcon)
+            let destination = try exportIconSet(for: selectedIcon, to: baseURL)
             exportMessage = "Exported \(selectedIcon.title) to \(destination.path)"
         } catch {
             exportMessage = "Export failed: \(error.localizedDescription)"
@@ -166,14 +176,11 @@ private struct AppIconContents: Encodable {
 }
 
 enum IconExportError: LocalizedError {
-    case missingPicturesDirectory
     case renderingFailed(size: CGFloat)
     case pngEncodingFailed(path: String)
 
     var errorDescription: String? {
         switch self {
-        case .missingPicturesDirectory:
-            "Could not find the Pictures directory."
         case .renderingFailed(let size):
             "Could not render the icon at \(Int(size)) px."
         case .pngEncodingFailed(let path):
@@ -183,8 +190,14 @@ enum IconExportError: LocalizedError {
 }
 
 @MainActor
-func exportIconSet(for icon: ExportableIcon) throws -> URL {
-    let destinationDirectory = try makeExportDirectory(named: icon.exportDirectoryName)
+func exportIconSet(for icon: ExportableIcon, to baseURL: URL) throws -> URL {
+    let fileManager = FileManager.default
+    let destinationDirectory = baseURL.appendingPathComponent(icon.exportDirectoryName, isDirectory: true)
+
+    if fileManager.fileExists(atPath: destinationDirectory.path) {
+        try fileManager.removeItem(at: destinationDirectory)
+    }
+    try fileManager.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
 
     for variant in AppIconVariant.allAppleAppIcons {
         guard let image = snapshot(of: icon.view(size: variant.pixelSize), pixelSize: variant.pixelSize) else {
@@ -208,26 +221,6 @@ func exportIconSet(for icon: ExportableIcon) throws -> URL {
     let contentsData = try encoder.encode(contents)
     try contentsData.write(to: contentsURL, options: .atomic)
 
-    return destinationDirectory
-}
-
-private func makeExportDirectory(named directoryName: String) throws -> URL {
-    let fileManager = FileManager.default
-
-    guard let picturesDirectory = fileManager.urls(for: .picturesDirectory, in: .userDomainMask).first else {
-        throw IconExportError.missingPicturesDirectory
-    }
-
-    let exportsRoot = picturesDirectory.appendingPathComponent("AppIconExports", isDirectory: true)
-    let destinationDirectory = exportsRoot.appendingPathComponent(directoryName, isDirectory: true)
-
-    try fileManager.createDirectory(at: exportsRoot, withIntermediateDirectories: true)
-
-    if fileManager.fileExists(atPath: destinationDirectory.path) {
-        try fileManager.removeItem(at: destinationDirectory)
-    }
-
-    try fileManager.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
     return destinationDirectory
 }
 
