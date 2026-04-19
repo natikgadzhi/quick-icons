@@ -59,6 +59,7 @@ struct EditorView: View {
     @State private var isCompiling = false
     @State private var compiledDylibURL: URL?
     @State private var exportMessage: ExportMessage?
+    @State private var hasCompiledIcon = false
 
     private let compiler = SwiftCompilerService()
     private let previewer = IconPreviewService()
@@ -77,6 +78,7 @@ struct EditorView: View {
             .frame(idealWidth: 300)
         }
         .frame(minWidth: 800, minHeight: 500)
+        .onChange(of: sourceCode) { hasCompiledIcon = false }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -96,6 +98,7 @@ struct EditorView: View {
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
+                .disabled(!hasCompiledIcon)
             }
         }
     }
@@ -112,9 +115,11 @@ struct EditorView: View {
         case .success(let dylibURL):
             compiledDylibURL = dylibURL
             compiledImage = previewer.render(dylibURL: dylibURL, size: 400)
+            hasCompiledIcon = true
         case .failure(let diagnostics):
             compiledDylibURL = nil
             compiledImage = nil
+            hasCompiledIcon = false
             if let first = diagnostics.first(where: { $0.severity == .error }) ?? diagnostics.first {
                 compileError = "Error on line \(first.line): \(first.message)"
             } else {
