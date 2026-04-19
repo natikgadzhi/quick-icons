@@ -142,6 +142,10 @@ struct STTextViewRepresentable: NSViewRepresentable {
         /// The pending diagnostics task. Cancelled and replaced on each keystroke.
         private var diagnosticsTask: Task<Void, Never>?
 
+        /// The pending completion task. Cancelled and replaced on each keystroke,
+        /// and automatically torn down when the Coordinator deallocates.
+        private var completionTask: Task<[any STCompletionItem]?, Never>?
+
         /// Shared diagnostics service.
         private let diagnosticsService = SourceKitDiagnosticsService()
 
@@ -186,10 +190,12 @@ struct STTextViewRepresentable: NSViewRepresentable {
                 self.applyDiagnostics(diagnostics, to: textView)
             }
 
-            // Trigger STTextView's completion machinery. The delegate below
-            // applies its own 200ms debounce, so a call per keystroke coalesces
-            // into at most one sourcekitd round-trip. Ctrl-Space (the built-in
-            // binding) also works for on-demand invocation.
+            // Cancel any in-flight completion request and kick off STTextView's
+            // completion machinery. The delegate below awaits the owned task,
+            // which carries the 200ms debounce + sourcekitd round-trip. A new
+            // keystroke cancels the prior task; Coordinator teardown cancels it
+            // via ARC.
+            completionTask?.cancel()
             textView.complete(self)
         }
 
@@ -197,11 +203,11 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
         /// STTextView's async completion hook.
         ///
-        /// STTextView calls this (via `cancelOperation` → `complete(_:)`, which
-        /// is bound to Escape, and also from the default key-binding when the
-        /// completion trigger fires). We debounce 200ms to absorb rapid typing,
-        /// then request suggestions from SourceKit at the UTF-8 byte offset of
-        /// the caret. Returning `nil` or `[]` dismisses the popup.
+        /// Each invocation cancel-and-replaces the Coordinator-owned
+        /// `completionTask`, which runs the 200ms debounce and sourcekitd
+        /// round-trip. The delegate awaits that task's value so STTextView
+        /// receives a fresh, debounced result per keystroke. Returning `nil`
+        /// or `[]` dismisses the popup.
         func textView(
             _ textView: STTextView,
             completionItemsAtLocation location: any NSTextLocation
@@ -214,25 +220,31 @@ struct STTextViewRepresentable: NSViewRepresentable {
             guard utf16Offset >= 0 else { return nil }
             let byteOffset = utf8ByteOffset(forUTF16Offset: utf16Offset, in: source)
 
-            // 200ms debounce — matches the spec; diagnostics use 700ms because
-            // error annotations are higher-cost/noisier than a completion list.
-            do {
-                try await Task.sleep(for: .milliseconds(200))
-            } catch {
-                return nil
-            }
-            if Task.isCancelled { return nil }
-
-            do {
-                let items = try await completionService.complete(
-                    source: source,
-                    offset: byteOffset
-                )
+            completionTask?.cancel()
+            let task = Task { [weak self] () -> [any STCompletionItem]? in
+                // 200ms debounce — matches the spec; diagnostics use 700ms because
+                // error annotations are higher-cost/noisier than a completion list.
+                do {
+                    try await Task.sleep(for: .milliseconds(200))
+                } catch {
+                    return nil
+                }
                 if Task.isCancelled { return nil }
-                return items.map { SwiftCompletionListItem(item: $0) }
-            } catch {
-                return nil
+                guard let self else { return nil }
+
+                do {
+                    let items = try await self.completionService.complete(
+                        source: source,
+                        offset: byteOffset
+                    )
+                    if Task.isCancelled { return nil }
+                    return items.map { SwiftCompletionListItem(item: $0) }
+                } catch {
+                    return nil
+                }
             }
+            completionTask = task
+            return await task.value
         }
 
         /// Converts a UTF-16 code-unit offset (what `NSTextLayoutManager.offset`
@@ -251,7 +263,10 @@ struct STTextViewRepresentable: NSViewRepresentable {
             guard let strIndex = endIndex.samePosition(in: source) else {
                 return source.utf8.count
             }
-            return source.utf8.distance(from: source.utf8.startIndex, to: strIndex.samePosition(in: source.utf8) ?? source.utf8.startIndex)
+            guard let utf8Index = strIndex.samePosition(in: source.utf8) else {
+                return source.utf8.count
+            }
+            return source.utf8.distance(from: source.utf8.startIndex, to: utf8Index)
         }
 
         // MARK: - Diagnostics → Annotations
