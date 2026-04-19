@@ -1,6 +1,7 @@
 ---
 dependencies: [08-wire-annotations, 10-wire-compile-button, 11-wire-export-button]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/38
 ---
 
 # Simplify Pass Across Services and Views
