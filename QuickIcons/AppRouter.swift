@@ -28,15 +28,20 @@ final class AppRouter {
 
     private let runner: ProcessRunner
 
+    /// Tracks the current probe task so stale tasks can be cancelled before starting a new one.
+    private var probeTask: Task<Void, Never>?
+
     init(runner: @escaping ProcessRunner = defaultProcessRunner) {
         self.runner = runner
     }
 
-    /// Kicks off the toolchain probe. Safe to call multiple times (each call re-runs the check).
+    /// Kicks off the toolchain probe. Cancels any in-flight probe before starting a new one.
     func checkToolchain() {
+        probeTask?.cancel()
         toolchainState = .checking
-        Task {
+        probeTask = Task {
             let (available, reason) = await probeToolchain(runner: runner)
+            guard !Task.isCancelled else { return }
             if available {
                 toolchainState = .available
             } else {

@@ -24,11 +24,7 @@ typealias ProcessRunner = @Sendable ([String]) async -> ProcessResult
 func defaultProcessRunner(_ args: [String]) async -> ProcessResult {
     await withCheckedContinuation { continuation in
         let process = Process()
-        guard let executableURL = URL(string: "file://" + args[0]) else {
-            continuation.resume(returning: ProcessResult(exitCode: -1, stdout: "", stderr: "Invalid executable path"))
-            return
-        }
-        process.executableURL = executableURL
+        process.executableURL = URL(filePath: args[0])
         process.arguments = Array(args.dropFirst())
 
         let stdoutPipe = Pipe()
