@@ -37,9 +37,19 @@ struct STTextViewRepresentable: NSViewRepresentable {
         textView.textDelegate = context.coordinator
 
         // Swift syntax highlighting via Plugin-Neon (tree-sitter).
-        // Theme.default ships inside the plugin bundle and is NSAppearance-aware
-        // (uses NSColor asset catalog entries that adapt to light/dark mode).
-        textView.addPlugin(NeonPlugin(theme: .default, language: .swift))
+        // Theme.xcode mirrors Xcode's stock "Default (Light / Dark)" palette and
+        // resolves dynamically per appearance — no restart required.
+        textView.addPlugin(NeonPlugin(theme: .xcode, language: .swift))
+
+        // Gutter: use Xcode's line-number text color (dynamic, light/dark).
+        // STGutterView.backgroundColor is internal, so background is left to the
+        // default NSVisualEffectView which already matches the editor tone.
+        textView.gutterView?.textColor = NSColor(name: nil) { appearance in
+            switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
+            case .darkAqua: return NSColor(srgbRed: 0x6C/255, green: 0x79/255, blue: 0x86/255, alpha: 1)
+            default:        return NSColor(srgbRed: 0x8A/255, green: 0x9B/255, blue: 0xAC/255, alpha: 1)
+            }
+        }
 
         // Inline diagnostics via Plugin-Annotations.
         // The coordinator acts as data source; we keep a reference so the
