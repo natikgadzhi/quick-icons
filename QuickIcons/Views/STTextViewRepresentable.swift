@@ -145,6 +145,9 @@ struct STTextViewRepresentable: NSViewRepresentable {
         /// Shared diagnostics service.
         private let diagnosticsService = SourceKitDiagnosticsService()
 
+        /// Shared completion service (lazy: first call spins up sourcekitd).
+        private let completionService = SourceKitCompletionService()
+
         init(text: Binding<String>) {
             self.text = text
         }
@@ -182,6 +185,73 @@ struct STTextViewRepresentable: NSViewRepresentable {
                 guard let textView else { return }
                 self.applyDiagnostics(diagnostics, to: textView)
             }
+
+            // Trigger STTextView's completion machinery. The delegate below
+            // applies its own 200ms debounce, so a call per keystroke coalesces
+            // into at most one sourcekitd round-trip. Ctrl-Space (the built-in
+            // binding) also works for on-demand invocation.
+            textView.complete(self)
+        }
+
+        // MARK: - Completion
+
+        /// STTextView's async completion hook.
+        ///
+        /// STTextView calls this (via `cancelOperation` → `complete(_:)`, which
+        /// is bound to Escape, and also from the default key-binding when the
+        /// completion trigger fires). We debounce 200ms to absorb rapid typing,
+        /// then request suggestions from SourceKit at the UTF-8 byte offset of
+        /// the caret. Returning `nil` or `[]` dismisses the popup.
+        func textView(
+            _ textView: STTextView,
+            completionItemsAtLocation location: any NSTextLocation
+        ) async -> [any STCompletionItem]? {
+            let source = textView.text ?? ""
+            let utf16Offset = textView.textLayoutManager.offset(
+                from: textView.textLayoutManager.documentRange.location,
+                to: location
+            )
+            guard utf16Offset >= 0 else { return nil }
+            let byteOffset = utf8ByteOffset(forUTF16Offset: utf16Offset, in: source)
+
+            // 200ms debounce — matches the spec; diagnostics use 700ms because
+            // error annotations are higher-cost/noisier than a completion list.
+            do {
+                try await Task.sleep(for: .milliseconds(200))
+            } catch {
+                return nil
+            }
+            if Task.isCancelled { return nil }
+
+            do {
+                let items = try await completionService.complete(
+                    source: source,
+                    offset: byteOffset
+                )
+                if Task.isCancelled { return nil }
+                return items.map { SwiftCompletionListItem(item: $0) }
+            } catch {
+                return nil
+            }
+        }
+
+        /// Converts a UTF-16 code-unit offset (what `NSTextLayoutManager.offset`
+        /// returns) into the UTF-8 byte offset SourceKit expects.
+        private func utf8ByteOffset(forUTF16Offset utf16Offset: Int, in source: String) -> Int {
+            guard utf16Offset > 0 else { return 0 }
+            guard let endIndex = source.utf16.index(
+                source.utf16.startIndex,
+                offsetBy: utf16Offset,
+                limitedBy: source.utf16.endIndex
+            ) else {
+                return source.utf8.count
+            }
+            // Convert the UTF-16 index to a String.Index; fall back to the
+            // full string if the offset lands mid-surrogate.
+            guard let strIndex = endIndex.samePosition(in: source) else {
+                return source.utf8.count
+            }
+            return source.utf8.distance(from: source.utf8.startIndex, to: strIndex.samePosition(in: source.utf8) ?? source.utf8.startIndex)
         }
 
         // MARK: - Diagnostics → Annotations
