@@ -68,16 +68,16 @@ struct EditorView: View {
     var body: some View {
         HSplitView {
             EditorPanel(sourceCode: $sourceCode)
-                .frame(idealWidth: 600)
+                .frame(minWidth: 420, idealWidth: 720, maxWidth: .infinity)
             PreviewPanel(
                 image: compiledImage,
                 errorMessage: compileError,
                 isCompiling: isCompiling,
                 exportMessage: $exportMessage
             )
-            .frame(idealWidth: 300)
+            .frame(minWidth: 300, idealWidth: 360, maxWidth: .infinity)
         }
-        .frame(minWidth: 800, minHeight: 500)
+        .frame(minWidth: 1080, minHeight: 500)
         .onChange(of: sourceCode) { hasCompiledIcon = false }
         .onReceive(NotificationCenter.default.publisher(for: .openSwiftFileNotification)) { notification in
             if let source = notification.userInfo?[OpenSwiftFileNotification.sourceKey] as? String {

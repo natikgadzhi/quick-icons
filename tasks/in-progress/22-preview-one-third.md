@@ -1,6 +1,7 @@
 ---
 dependencies: []
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/32
 ---
 
 # Preview Pane: One-Third Default Width
