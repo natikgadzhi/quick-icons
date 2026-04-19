@@ -141,8 +141,12 @@ struct EditorView: View {
         guard panel.runModal() == .OK, let baseURL = panel.url else { return }
 
         // Look up the view factory symbol once before the export loop.
-        guard let handle = dlopen(dylibURL.path, RTLD_NOW | RTLD_LOCAL),
-              let sym = dlsym(handle, "_quickIconsMakeView") else {
+        guard let handle = dlopen(dylibURL.path, RTLD_NOW | RTLD_LOCAL) else {
+            exportMessage = .error("Could not load the compiled icon. Try building again.")
+            return
+        }
+        guard let sym = dlsym(handle, "_quickIconsMakeView") else {
+            dlclose(handle)
             exportMessage = .error("Could not load the compiled icon. Try building again.")
             return
         }
