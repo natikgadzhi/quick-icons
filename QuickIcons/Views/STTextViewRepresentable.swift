@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 import STTextView
+import STPluginNeon
+import TreeSitterResource
 
 /// NSViewRepresentable wrapper around STTextView.
 /// Provides a two-way binding to a plain-text String, a monospaced font,
-/// and a visible line-number gutter. Plugin setup is intentionally left
-/// empty so tasks 05 and 08 can add Neon / Annotations cleanly.
+/// a visible line-number gutter, and Swift syntax highlighting via Plugin-Neon.
 struct STTextViewRepresentable: NSViewRepresentable {
     @Binding var text: String
 
@@ -33,10 +34,13 @@ struct STTextViewRepresentable: NSViewRepresentable {
         // Delegate for text-change callbacks
         textView.textDelegate = context.coordinator
 
+        // Swift syntax highlighting via Plugin-Neon (tree-sitter).
+        // Theme.default ships inside the plugin bundle and is NSAppearance-aware
+        // (uses NSColor asset catalog entries that adapt to light/dark mode).
+        textView.addPlugin(NeonPlugin(theme: .default, language: .swift))
+
         // Set initial content
         textView.text = text
-
-        // Plugins: empty for now — tasks 05 / 08 add Neon and Annotations here.
 
         return scrollView
     }
