@@ -48,3 +48,7 @@ A written analysis (markdown, in this task's PR or as a follow-up `docs/sttextvi
 - This is a research task. **Do not modify app code** aside from temporary exploration. If you need to test something, write a throwaway script in `scratch/`.
 - Budget: one focused session. Stop at the writeup.
 - Use the `swiftui-pro` and `swift-concurrency-pro` skills if relevant while auditing.
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/33 — `docs/sttextview-audit.md`
