@@ -317,13 +317,7 @@ struct STTextViewRepresentable: NSViewRepresentable {
             diagnosticMarkerLines.removeAll(keepingCapacity: true)
 
             // Pick the most severe diagnostic per line.
-            var worstByLine: [Int: SwiftDiagnostic.Severity] = [:]
-            for diagnostic in diagnostics where diagnostic.line >= 1 {
-                let current = worstByLine[diagnostic.line]
-                if current == nil || severityRank(diagnostic.severity) > severityRank(current!) {
-                    worstByLine[diagnostic.line] = diagnostic.severity
-                }
-            }
+            let worstByLine = Self.mostSevereByLine(diagnostics)
 
             for (line, severity) in worstByLine {
                 let markerView = DiagnosticMarkerView(severity: severity)
@@ -332,7 +326,21 @@ struct STTextViewRepresentable: NSViewRepresentable {
             }
         }
 
-        private func severityRank(_ severity: SwiftDiagnostic.Severity) -> Int {
+        /// Returns a mapping of 1-based line number → most-severe severity for that
+        /// line among `diagnostics`. Diagnostics with non-positive line numbers are
+        /// ignored. Exposed (non-private) to keep the dedup rule directly testable.
+        static func mostSevereByLine(_ diagnostics: [SwiftDiagnostic]) -> [Int: SwiftDiagnostic.Severity] {
+            var worstByLine: [Int: SwiftDiagnostic.Severity] = [:]
+            for diagnostic in diagnostics where diagnostic.line >= 1 {
+                let current = worstByLine[diagnostic.line]
+                if current == nil || severityRank(diagnostic.severity) > severityRank(current!) {
+                    worstByLine[diagnostic.line] = diagnostic.severity
+                }
+            }
+            return worstByLine
+        }
+
+        static func severityRank(_ severity: SwiftDiagnostic.Severity) -> Int {
             switch severity {
             case .error: return 2
             case .warning: return 1
@@ -390,7 +398,6 @@ private final class DiagnosticMarkerView: NSView {
         case .note: .systemGray
         }
         super.init(frame: .zero)
-        wantsLayer = true
     }
 
     @available(*, unavailable)
