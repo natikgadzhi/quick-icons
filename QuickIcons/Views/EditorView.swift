@@ -118,7 +118,6 @@ struct EditorView: View {
 
     private func compile() async {
         isCompiling = true
-        compiledImage = nil
         compileError = nil
         exportMessage = nil
 
