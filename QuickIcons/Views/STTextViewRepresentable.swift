@@ -28,7 +28,20 @@ struct STTextViewRepresentable: NSViewRepresentable {
         // Appearance
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.isHorizontallyResizable = false
+
+        // Current-line highlight: matches Xcode's default editor behavior.
+        // Light: #E8F0FE (faint blue-grey); Dark: ~8% white on the dark background.
+        // NSColor(name:dynamicProvider:) resolves on every appearance change without
+        // requiring an app restart.  STTextView hides the highlight automatically
+        // when the selection spans more than a single insertion point — matching
+        // Xcode's multi-line-selection behavior exactly.
         textView.highlightSelectedLine = true
+        textView.selectedLineHighlightColor = NSColor(name: "xcodeCurrentLine") { appearance in
+            switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
+            case .darkAqua: return NSColor(white: 1.0, alpha: 0.08)   // ~8% white
+            default:        return NSColor(srgbRed: 0xE8/255, green: 0xF0/255, blue: 0xFE/255, alpha: 1.0) // #E8F0FE
+            }
+        }
 
         // Line-number gutter
         textView.showsLineNumbers = true
