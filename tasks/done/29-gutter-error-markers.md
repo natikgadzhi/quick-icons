@@ -36,3 +36,7 @@ affordance.
 
 - Quick-fix menu on marker click.
 - Custom marker shapes beyond the default dot.
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/40
