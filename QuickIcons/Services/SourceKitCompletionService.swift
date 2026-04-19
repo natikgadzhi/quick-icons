@@ -52,7 +52,7 @@ public enum CompletionKind: String, Sendable, Equatable, CaseIterable {
     /// SF Symbol name used by stage 3 for the completion popup icon.
     public var sfSymbolName: String {
         switch self {
-        case .function:   return "function"
+        case .function:   return "f.square"
         case .method:     return "m.square"
         case .class:      return "c.square"
         case .struct:     return "s.square"
