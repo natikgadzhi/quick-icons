@@ -11,7 +11,7 @@ import SwiftUI
 struct QuickIconsApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppRouterView()
                 .toolbarBackground(.visible, for: .windowToolbar)
         }
     }
