@@ -9,10 +9,11 @@ import SwiftUI
 
 @main
 struct QuickIconsApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             AppRouterView()
-                .toolbarBackground(.visible, for: .windowToolbar)
         }
     }
 }
