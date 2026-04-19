@@ -1,6 +1,7 @@
 ---
 dependencies: [06-swift-compiler-service]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/18
 ---
 
 # App-Level Toolchain Availability Router

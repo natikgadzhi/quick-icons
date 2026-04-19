@@ -38,21 +38,27 @@ enum CompilationResult: Sendable {
 /// The service appends a bridge function that exposes `_quickIconsMakeView` as a
 /// C symbol so the dylib can be loaded via `dlsym` by `IconPreviewService`.
 @MainActor
-struct SwiftCompilerService {
+final class SwiftCompilerService {
 
     // Stable dylib path — reused across compiles so we never accumulate files.
     private let dylibURL: URL = FileManager.default.temporaryDirectory
         .appendingPathComponent("quickicons-usericon.dylib")
 
-    // SDK path derived from `xcrun` — cached once at init.
-    private let sdkPath: String
+    // SDK path and swiftc path are resolved lazily on first compile (off the main thread
+    // via async context) to avoid blocking MainActor during init with synchronous xcrun calls.
+    private var _sdkPath: String?
+    private var _swiftcPath: String?
 
-    // Path to swiftc — derived from `xcrun` at init.
-    private let swiftcPath: String
+    init() {}
 
-    init() {
-        self.sdkPath = Self.resolveSDKPath()
-        self.swiftcPath = Self.resolveSwiftcPath()
+    /// Resolves and caches the SDK path and swiftc path on first use.
+    private func resolveToolchainPaths() async {
+        if _sdkPath == nil {
+            _sdkPath = await Task.detached { Self.resolveSDKPath() }.value
+        }
+        if _swiftcPath == nil {
+            _swiftcPath = await Task.detached { Self.resolveSwiftcPath() }.value
+        }
     }
 
     // MARK: - Public API
@@ -60,6 +66,12 @@ struct SwiftCompilerService {
     /// Compiles `source` to a dylib, returning `.success(dylibURL)` on success or
     /// `.failure(diagnostics)` when swiftc reports errors.
     func compile(source: String) async -> CompilationResult {
+        // Resolve toolchain paths lazily on first compile — avoids blocking MainActor at init.
+        await resolveToolchainPaths()
+
+        let sdkPath = _sdkPath ?? ""
+        let swiftcPath = _swiftcPath ?? "/usr/bin/swiftc"
+
         let fm = FileManager.default
 
         // Write the augmented source to a temp file.
@@ -180,19 +192,19 @@ public func _quickIconsMakeView(_ size: Double) -> UnsafeMutableRawPointer {
 
     // MARK: - Toolchain resolution
 
-    private static func resolveSDKPath() -> String {
+    nonisolated private static func resolveSDKPath() -> String {
         let result = runSyncProcess("/usr/bin/xcrun", args: ["--sdk", "macosx", "--show-sdk-path"])
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func resolveSwiftcPath() -> String {
+    nonisolated private static func resolveSwiftcPath() -> String {
         let result = runSyncProcess("/usr/bin/xcrun", args: ["-f", "swiftc"])
         let path = result.trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? "/usr/bin/swiftc" : path
     }
 
     /// Runs a process synchronously and returns its stdout as a string.
-    private static func runSyncProcess(_ executable: String, args: [String]) -> String {
+    nonisolated private static func runSyncProcess(_ executable: String, args: [String]) -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = args
