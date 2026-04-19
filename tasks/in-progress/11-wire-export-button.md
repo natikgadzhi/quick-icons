@@ -1,6 +1,7 @@
 ---
 dependencies: [10-wire-compile-button]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/20
 ---
 
 # Wire Export Button to IconExportService

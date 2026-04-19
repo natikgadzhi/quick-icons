@@ -52,6 +52,37 @@ struct IconExportService {
         return destination
     }
 
+    /// Exports all icon variants using a view factory closure into a new subdirectory inside `baseURL`.
+    /// The factory receives the pixel size for each variant and returns the view to render.
+    /// Returns the URL of the created `.appiconset` directory.
+    func export(viewFactory: @escaping (CGFloat) -> AnyView, name: String, to baseURL: URL) throws -> URL {
+        let fileManager = FileManager.default
+        let directoryName = "\(name).appiconset"
+        let destination = baseURL.appendingPathComponent(directoryName, isDirectory: true)
+
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
+
+        for variant in AppIconVariant.all {
+            let view = viewFactory(variant.pixelSize)
+            guard let image = render(view, pixelSize: variant.pixelSize) else {
+                throw IconExportError.renderingFailed(size: variant.pixelSize)
+            }
+            try writePNG(image, to: destination.appendingPathComponent(variant.filename))
+        }
+
+        let contentsData = try JSONEncoder.appIconEncoder.encode(
+            AppIconContents(images: AppIconVariant.all.map {
+                .init(filename: $0.filename, idiom: $0.idiom, scale: $0.scale, size: $0.pointSize)
+            })
+        )
+        try contentsData.write(to: destination.appendingPathComponent("Contents.json"), options: .atomic)
+
+        return destination
+    }
+
     private func render<V: View>(_ view: V, pixelSize: CGFloat) -> CGImage? {
         let renderer = ImageRenderer(content: view)
         renderer.scale = 1
