@@ -79,10 +79,18 @@ struct EditorView: View {
         }
         .frame(minWidth: 1080, minHeight: 500)
         .onChange(of: sourceCode) { hasCompiledIcon = false }
+        .focusedSceneValue(\.hasCompiledIcon, hasCompiledIcon)
         .onReceive(NotificationCenter.default.publisher(for: .openSwiftFileNotification)) { notification in
             if let source = notification.userInfo?[OpenSwiftFileNotification.sourceKey] as? String {
                 sourceCode = source
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .buildRequested)) { _ in
+            Task { await compile() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .exportRequested)) { _ in
+            guard hasCompiledIcon else { return }
+            export()
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

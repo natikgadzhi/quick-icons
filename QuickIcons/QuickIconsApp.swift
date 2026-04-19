@@ -24,6 +24,8 @@ struct QuickIconsApp: App {
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
+
+            BuildExportCommands()
         }
     }
 
@@ -68,4 +70,47 @@ enum OpenSwiftFileNotification {
 
 extension Notification.Name {
     static let openSwiftFileNotification = Notification.Name("QuickIcons.OpenSwiftFile")
+    static let buildRequested = Notification.Name("QuickIcons.BuildRequested")
+    static let exportRequested = Notification.Name("QuickIcons.ExportRequested")
+}
+
+// MARK: - Build / Export focused value
+
+/// Key for exposing `hasCompiledIcon` from EditorView to the menu commands.
+struct HasCompiledIconKey: FocusedValueKey {
+    typealias Value = Bool
+}
+
+extension FocusedValues {
+    var hasCompiledIcon: Bool? {
+        get { self[HasCompiledIconKey.self] }
+        set { self[HasCompiledIconKey.self] = newValue }
+    }
+}
+
+// MARK: - Build / Export menu commands
+
+struct BuildExportCommands: Commands {
+    @FocusedValue(\.hasCompiledIcon) private var hasCompiledIcon
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Divider()
+
+            Button {
+                NotificationCenter.default.post(name: .buildRequested, object: nil)
+            } label: {
+                Label("Build", systemImage: "hammer.fill")
+            }
+            .keyboardShortcut("b", modifiers: .command)
+
+            Button {
+                NotificationCenter.default.post(name: .exportRequested, object: nil)
+            } label: {
+                Label("Export", systemImage: "square.and.arrow.up")
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(!(hasCompiledIcon ?? false))
+        }
+    }
 }
