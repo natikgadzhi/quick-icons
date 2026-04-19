@@ -72,9 +72,9 @@ import_signing_certificate_if_needed() {
   decode_base64_to_file "${APPLE_DEVELOPER_ID_P12_BASE64}" "${cert_path}"
 
   security create-keychain -p "${TEMP_KEYCHAIN_PASSWORD}" "${TEMP_KEYCHAIN_PATH}"
+  KEYCHAIN_CREATED=1
   security set-keychain-settings -lut 21600 "${TEMP_KEYCHAIN_PATH}"
   security unlock-keychain -p "${TEMP_KEYCHAIN_PASSWORD}" "${TEMP_KEYCHAIN_PATH}"
-  KEYCHAIN_CREATED=1
 
   local existing_keychains
   existing_keychains="$(security list-keychains -d user | tr -d '"')"

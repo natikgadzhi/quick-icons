@@ -62,6 +62,9 @@ Supply either a keychain profile (local) or API key (CI):
 | `DMG_BASENAME` | `QuickIcons` |
 | `DMG_VERSION` | Read from `CFBundleShortVersionString` |
 | `DMG_NAME` | `QuickIcons <version>.dmg` |
+| `EXPORT_DIR` | `build/export` |
+| `RELEASE_DIR` | `build/release` |
+| `DMG_STAGING_DIR` | `build/dmg` |
 
 ## What The Script Does
 
