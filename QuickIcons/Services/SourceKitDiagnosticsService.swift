@@ -8,14 +8,14 @@ import SourceKittenFramework
 /// type-checking diagnostics synchronously for a file on disk.
 ///
 /// The service never throws to the caller — any internal SourceKit failure returns an empty array.
-public nonisolated struct SourceKitDiagnosticsService: Sendable {
+nonisolated struct SourceKitDiagnosticsService: Sendable {
 
     public nonisolated init() {}
 
     /// Returns diagnostics for `source`. Writes `source` to a temporary file and queries
     /// SourceKit's dedicated diagnostics request with the system Swift SDK.
     /// Returns an empty array on any SourceKit failure.
-    public nonisolated func diagnostics(for source: String) async -> [SwiftDiagnostic] {
+    nonisolated func diagnostics(for source: String) async -> [SwiftDiagnostic] {
         guard !source.isEmpty else { return [] }
 
         guard let tmpURL = writeTempFile(source) else { return [] }
@@ -130,7 +130,7 @@ public nonisolated struct SourceKitDiagnosticsService: Sendable {
         )
     }
 
-    private nonisolated func parseSeverity(_ uid: String) -> Severity {
+    private nonisolated func parseSeverity(_ uid: String) -> SwiftDiagnostic.Severity {
         if uid.hasSuffix(".error") { return .error }
         if uid.hasSuffix(".warning") { return .warning }
         return .note
