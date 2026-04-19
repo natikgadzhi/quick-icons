@@ -20,36 +20,73 @@ extension Theme {
 extension Theme.Colors {
 
     /// Dynamic colors keyed to Xcode's canonical token palette.
+    ///
+    /// Covers every capture emitted by
+    /// `STTextView-Plugin-Neon/Sources/TreeSitterSwiftQueries/highlights.scm` (28
+    /// distinct scopes). Light/dark hex pairs mirror Xcode's stock
+    /// "Default (Light)" and "Default (Dark)" themes.
     static let xcode: Theme.Colors = {
-        // Shared dynamic color values (reused across multiple tokens)
-        let plain    = NSColor.xcodeToken(light: 0x000000, dark: 0xFFFFFF)
-        let keyword  = NSColor.xcodeToken(light: 0xAD3DA4, dark: 0xFF7AB2)  // #AD3DA4 / #FF7AB2
-        let type_    = NSColor.xcodeToken(light: 0x703DAF, dark: 0xD9B9FF)  // #703DAF / #D9B9FF
-        let string   = NSColor.xcodeToken(light: 0xD12F1B, dark: 0xFF8170)  // #D12F1B / #FF8170
-        let number   = NSColor.xcodeToken(light: 0x272AD8, dark: 0xD9C97C)  // #272AD8 / #D9C97C
-        let comment  = NSColor.xcodeToken(light: 0x707F8C, dark: 0x7F8C98)  // #707F8C / #7F8C98
+        // Shared dynamic color values (reused across multiple tokens).
+        let plain       = NSColor.xcodeToken(light: 0x000000, dark: 0xFFFFFF)
+        let keyword     = NSColor.xcodeToken(light: 0xAD3DA4, dark: 0xFF7AB2)  // magenta
+        let type_       = NSColor.xcodeToken(light: 0x703DAF, dark: 0xD9B9FF)  // purple
+        let string      = NSColor.xcodeToken(light: 0xD12F1B, dark: 0xFF8170)  // red/coral
+        let number      = NSColor.xcodeToken(light: 0x272AD8, dark: 0xD9C97C)  // blue/tan
+        let comment     = NSColor.xcodeToken(light: 0x707F8C, dark: 0x7F8C98)  // gray
+        let functionCall = NSColor.xcodeToken(light: 0x272AD8, dark: 0x41A1C0) // project function blue
+        let property    = NSColor.xcodeToken(light: 0x326D74, dark: 0x67B7A4)  // instance property teal
+        let macro       = NSColor.xcodeToken(light: 0x804FB8, dark: 0xFFA14F)  // attribute/macro
+        let regex       = NSColor.xcodeToken(light: 0x4C4C6A, dark: 0xB89EF8)  // regex literal
 
         let colors: [String: NSColor] = [
-            "plain":               plain,
-            "keyword":             keyword,
-            "keyword.function":    keyword,
-            "keyword.return":      keyword,
-            "include":             keyword,
-            "type":                type_,
-            "constructor":         type_,
-            "string":              string,
-            "text.literal":        string,
-            "number":              number,
-            "boolean":             number,
-            "comment":             comment,
-            "variable":            plain,
-            "variable.builtin":    plain,
-            "parameter":           plain,
-            "function.call":       plain,
-            "method":              plain,
-            "operator":            plain,
-            "punctuation.special": plain,
-            "text.title":          keyword,
+            // Baseline / fallback
+            "plain":                 plain,
+
+            // Keywords and keyword-flavored scopes
+            "keyword":               keyword,
+            "keyword.function":      keyword,
+            "keyword.return":        keyword,
+            "keyword.operator":      keyword,
+            "conditional":           keyword,
+            "repeat":                keyword,
+            "include":               keyword,
+            "variable.builtin":      keyword,  // self, super, nil — Xcode bolds in magenta
+
+            // Types
+            "type":                  type_,
+            "constructor":           type_,
+
+            // Functions / methods / macros
+            "method":                functionCall,
+            "function.call":         functionCall,
+            "function.macro":        macro,
+
+            // Identifiers
+            "variable":              plain,
+            "parameter":             plain,
+            "property":              property,
+            "label":                 plain,
+
+            // Literals
+            "string":                string,
+            "string.regex":          regex,
+            "text.literal":          string,
+            "number":                number,
+            "float":                 number,
+            "boolean":               number,
+
+            // Comments
+            "comment":               comment,
+            "spell":                 comment,
+
+            // Punctuation / operators
+            "operator":              plain,
+            "punctuation.bracket":   plain,
+            "punctuation.delimiter": plain,
+            "punctuation.special":   plain,
+
+            // Markdown-ish (kept from previous theme, no-op for Swift)
+            "text.title":            keyword,
         ]
         return Theme.Colors(colors: colors)
     }()
@@ -62,26 +99,41 @@ extension Theme.Fonts {
         let regular = NSFont.monospacedSystemFont(ofSize: 0, weight: .regular)
         let medium  = NSFont.monospacedSystemFont(ofSize: 0, weight: .medium)
         let fonts: [String: NSFont] = [
-            "plain":               regular,
-            "boolean":             regular,
-            "comment":             regular,
-            "constructor":         regular,
-            "function.call":       regular,
-            "include":             medium,
-            "keyword":             medium,
-            "keyword.function":    medium,
-            "keyword.return":      medium,
-            "method":              regular,
-            "number":              regular,
-            "operator":            regular,
-            "parameter":           regular,
-            "punctuation.special": regular,
-            "string":              regular,
-            "text.literal":        regular,
-            "text.title":          medium,
-            "type":                regular,
-            "variable.builtin":    regular,
-            "variable":            regular,
+            "plain":                 regular,
+
+            // Keyword-flavored scopes render in medium weight, matching Xcode.
+            "keyword":               medium,
+            "keyword.function":      medium,
+            "keyword.return":        medium,
+            "keyword.operator":      medium,
+            "conditional":           medium,
+            "repeat":                medium,
+            "include":               medium,
+            "variable.builtin":      medium,
+            "text.title":            medium,
+
+            // Regular-weight scopes
+            "boolean":               regular,
+            "comment":               regular,
+            "spell":                 regular,
+            "constructor":           regular,
+            "function.call":         regular,
+            "function.macro":        regular,
+            "method":                regular,
+            "number":                regular,
+            "float":                 regular,
+            "operator":              regular,
+            "parameter":             regular,
+            "property":              regular,
+            "label":                 regular,
+            "punctuation.bracket":   regular,
+            "punctuation.delimiter": regular,
+            "punctuation.special":   regular,
+            "string":                regular,
+            "string.regex":          regular,
+            "text.literal":          regular,
+            "type":                  regular,
+            "variable":              regular,
         ]
         return Theme.Fonts(fonts: fonts)
     }()

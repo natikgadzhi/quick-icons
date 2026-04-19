@@ -1,6 +1,7 @@
 ---
 dependencies: [15-xcode-color-theme]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/35
 ---
 
 # Expand XcodeColorTheme to all 28 Swift Captures
