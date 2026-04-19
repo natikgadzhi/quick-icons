@@ -4,8 +4,7 @@ struct EditorPanel: View {
     @Binding var sourceCode: String
 
     var body: some View {
-        TextEditor(text: $sourceCode)
-            .font(.system(.body, design: .monospaced))
+        STTextViewRepresentable(text: $sourceCode)
             .frame(minWidth: 420)
     }
 }
