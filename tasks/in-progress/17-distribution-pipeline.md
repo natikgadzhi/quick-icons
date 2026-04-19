@@ -1,6 +1,7 @@
 ---
 dependencies: []
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/23
 ---
 
 # Distribution Pipeline (Sign, Notarize, DMG)
