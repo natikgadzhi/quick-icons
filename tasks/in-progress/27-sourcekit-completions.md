@@ -6,7 +6,7 @@ status: in-progress
 ## Pull Requests
 
 - Stage 1 (service + tests): https://github.com/natikgadzhi/quick-icons/pull/37
-- Stage 2 (delegate wiring + debounce + popup): _pending push_
+- Stage 2 (delegate wiring + debounce + popup): https://github.com/natikgadzhi/quick-icons/pull/39
 
 # SourceKit-backed Code Completion
 
