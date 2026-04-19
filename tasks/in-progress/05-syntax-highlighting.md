@@ -1,6 +1,6 @@
 ---
 dependencies: [01-add-spm-dependencies, 04-wire-sttextview]
-status: backlog
+status: in-progress
 ---
 
 # Swift Syntax Highlighting with Plugin-Neon
@@ -25,3 +25,7 @@ Plugin-Neon uses tree-sitter under the hood. You will need:
 Wire the plugin into the STTextView setup in `EditorPanel` (or its `NSViewRepresentable` wrapper) — the plugin setup was left as a stub in task 04.
 
 Use a theme that maps to system colors where possible so it looks reasonable in both light and dark mode. A simple theme with distinct colors for keywords, strings, comments, and types is sufficient.
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/10
