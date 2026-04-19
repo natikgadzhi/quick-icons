@@ -67,16 +67,26 @@ struct EditorView: View {
     private let exporter = IconExportService()
 
     var body: some View {
-        HSplitView {
-            EditorPanel(sourceCode: $sourceCode, showsInvisibles: showsInvisibles)
-                .frame(minWidth: 420, idealWidth: 720, maxWidth: .infinity)
-            PreviewPanel(
-                image: compiledImage,
-                errorMessage: compileError,
-                isCompiling: isCompiling,
-                exportMessage: $exportMessage
-            )
-            .frame(minWidth: 300, idealWidth: 360, maxWidth: .infinity)
+        GeometryReader { proxy in
+            HSplitView {
+                EditorPanel(sourceCode: $sourceCode, showsInvisibles: showsInvisibles)
+                    .frame(
+                        minWidth: 420,
+                        idealWidth: proxy.size.width * 2 / 3,
+                        maxWidth: .infinity
+                    )
+                PreviewPanel(
+                    image: compiledImage,
+                    errorMessage: compileError,
+                    isCompiling: isCompiling,
+                    exportMessage: $exportMessage
+                )
+                .frame(
+                    minWidth: 300,
+                    idealWidth: proxy.size.width / 3,
+                    maxWidth: max(proxy.size.width / 2, 300)
+                )
+            }
         }
         .frame(minWidth: 1080, minHeight: 500)
         .onChange(of: sourceCode) { hasCompiledIcon = false }
