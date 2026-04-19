@@ -1,6 +1,7 @@
 ---
 dependencies: [11-wire-export-button, 12-future-export-disabled-state]
 status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/26
 ---
 
 # Preview Pane Polish — Padding & Toast Overlay
