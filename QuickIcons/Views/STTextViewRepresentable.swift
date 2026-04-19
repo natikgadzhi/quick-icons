@@ -207,7 +207,7 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
             isInsertingAutoIndent = true
             defer { isInsertingAutoIndent = false }
-            textView.insertText("\n" + indent, replacementRange: NSRange(location: NSNotFound, length: 0))
+            textView.insertText("\n" + indent, replacementRange: textView.selectedRange())
             return false
         }
 

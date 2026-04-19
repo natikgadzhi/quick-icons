@@ -97,6 +97,18 @@ struct AutoIndentTests {
         #expect(indent == "  ")
     }
 
+    @Test func caretMidLineCopiesCurrentLineLeadingWhitespace() {
+        // Caret sits mid-line, after "  let ". The helper reads the leading
+        // whitespace of the current line (not the whitespace before the caret),
+        // so it returns "  " — the two spaces at the start of the line.
+        let source = "  let x = 1"
+        let indent = AutoIndent.indent(
+            source: source,
+            insertionPointUTF16Offset: 6
+        )
+        #expect(indent == "  ")
+    }
+
     @Test func braceAfterTabIndentAddsFourSpaces() {
         // Leading tab + brace-terminated line → one tab + 4 spaces.
         let source = "\tif true {"

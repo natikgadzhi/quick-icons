@@ -63,6 +63,8 @@ enum AutoIndent {
 
         // If the character immediately before the caret is `{`, deepen the
         // indent by one level (4 spaces). Matches Xcode's default behavior.
+        // Note: no lexer context — a '{' inside a string literal or comment
+        // will trigger the extra indent. Accepted limitation per task spec.
         let prevIndex = source.index(before: caretStringIndex)
         if source[prevIndex] == "{" {
             leading.append("    ")
