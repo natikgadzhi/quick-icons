@@ -12,6 +12,7 @@ struct QuickIconsApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .toolbarBackground(.visible, for: .windowToolbar)
         }
     }
 }
