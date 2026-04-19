@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import SwiftUI
 
 private let defaultSourceCode = """
@@ -56,9 +57,12 @@ struct EditorView: View {
     @State private var compiledImage: NSImage?
     @State private var compileError: String?
     @State private var isCompiling = false
+    @State private var compiledDylibURL: URL?
+    @State private var exportMessage: ExportMessage?
 
     private let compiler = SwiftCompilerService()
     private let previewer = IconPreviewService()
+    private let exporter = IconExportService()
 
     var body: some View {
         HSplitView {
@@ -67,7 +71,8 @@ struct EditorView: View {
             PreviewPanel(
                 image: compiledImage,
                 errorMessage: compileError,
-                isCompiling: isCompiling
+                isCompiling: isCompiling,
+                exportMessage: exportMessage
             )
             .frame(idealWidth: 300)
         }
@@ -87,7 +92,7 @@ struct EditorView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    // TODO: wire up export action in a later task
+                    export()
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
@@ -99,13 +104,16 @@ struct EditorView: View {
         isCompiling = true
         compiledImage = nil
         compileError = nil
+        exportMessage = nil
 
         let result = await compiler.compile(source: sourceCode)
 
         switch result {
         case .success(let dylibURL):
+            compiledDylibURL = dylibURL
             compiledImage = previewer.render(dylibURL: dylibURL, size: 400)
         case .failure(let diagnostics):
+            compiledDylibURL = nil
             compiledImage = nil
             if let first = diagnostics.first(where: { $0.severity == .error }) ?? diagnostics.first {
                 compileError = "Error on line \(first.line): \(first.message)"
@@ -116,6 +124,52 @@ struct EditorView: View {
 
         isCompiling = false
     }
+
+    private func export() {
+        guard let dylibURL = compiledDylibURL else {
+            exportMessage = .error("Compile the icon first before exporting.")
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Export Here"
+        panel.message = "Choose the directory to export the AppIcon.appiconset bundle into."
+
+        guard panel.runModal() == .OK, let baseURL = panel.url else { return }
+
+        // Look up the view factory symbol once before the export loop.
+        guard let handle = dlopen(dylibURL.path, RTLD_NOW | RTLD_LOCAL),
+              let sym = dlsym(handle, "_quickIconsMakeView") else {
+            exportMessage = .error("Could not load the compiled icon. Try building again.")
+            return
+        }
+
+        typealias MakeViewFn = @convention(c) (Double) -> UnsafeMutableRawPointer
+        let makeView = unsafeBitCast(sym, to: MakeViewFn.self)
+
+        let viewFactory: (CGFloat) -> AnyView = { size in
+            let opaquePtr = makeView(Double(size))
+            let obj = Unmanaged<AnyObject>.fromOpaque(opaquePtr).takeRetainedValue()
+            return (obj as? AnyView) ?? AnyView(Color.clear.frame(width: size, height: size))
+        }
+
+        do {
+            let destination = try exporter.export(viewFactory: viewFactory, name: "AppIcon", to: baseURL)
+            dlclose(handle)
+            exportMessage = .success(destination.path)
+        } catch {
+            dlclose(handle)
+            exportMessage = .error(error.localizedDescription)
+        }
+    }
+}
+
+enum ExportMessage: Equatable {
+    case success(String)
+    case error(String)
 }
 
 #Preview {

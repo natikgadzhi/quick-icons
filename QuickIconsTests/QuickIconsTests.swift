@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftUI
 import Testing
 @testable import QuickIcons
 
@@ -54,72 +55,83 @@ struct ExportableIconTests {
     }
 }
 
-// MARK: - IconExportService integration
-//
-// Integration tests disabled — re-enable when ready.
-//
-// @MainActor
-// struct IconExportServiceTests {
-//     private func makeTempDirectory() throws -> URL {
-//         let tmp = FileManager.default.temporaryDirectory
-//             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-//         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
-//         return tmp
-//     }
-//
-//     @Test(arguments: ExportableIcon.allCases)
-//     func exportCreatesAppiconsetDirectory(icon: ExportableIcon) throws {
-//         let base = try makeTempDirectory()
-//         defer { try? FileManager.default.removeItem(at: base) }
-//
-//         let result = try IconExportService().export(icon, to: base)
-//
-//         #expect(result.lastPathComponent == icon.exportDirectoryName)
-//         var isDir: ObjCBool = false
-//         let exists = FileManager.default.fileExists(atPath: result.path, isDirectory: &isDir)
-//         #expect(exists && isDir.boolValue)
-//     }
-//
-//     @Test(arguments: ExportableIcon.allCases)
-//     func exportWritesAllPNGs(icon: ExportableIcon) throws {
-//         let base = try makeTempDirectory()
-//         defer { try? FileManager.default.removeItem(at: base) }
-//
-//         let result = try IconExportService().export(icon, to: base)
-//
-//         for variant in AppIconVariant.all {
-//             let file = result.appendingPathComponent(variant.filename)
-//             #expect(FileManager.default.fileExists(atPath: file.path), "\(variant.filename) missing")
-//         }
-//     }
-//
-//     @Test(arguments: ExportableIcon.allCases)
-//     func exportWritesValidContentsJSON(icon: ExportableIcon) throws {
-//         let base = try makeTempDirectory()
-//         defer { try? FileManager.default.removeItem(at: base) }
-//
-//         let result = try IconExportService().export(icon, to: base)
-//         let contentsURL = result.appendingPathComponent("Contents.json")
-//
-//         let data = try Data(contentsOf: contentsURL)
-//         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-//
-//         #expect(json != nil)
-//         let images = json?["images"] as? [[String: Any]]
-//         #expect(images?.count == AppIconVariant.all.count)
-//     }
-//
-//     @Test(arguments: ExportableIcon.allCases)
-//     func exportOverwritesExistingAppiconset(icon: ExportableIcon) throws {
-//         let base = try makeTempDirectory()
-//         defer { try? FileManager.default.removeItem(at: base) }
-//
-//         let service = IconExportService()
-//         _ = try service.export(icon, to: base)
-//
-//         // Second export should not throw even though the directory already exists.
-//         #expect(throws: Never.self) {
-//             _ = try service.export(icon, to: base)
-//         }
-//     }
-// }
+// MARK: - IconExportService — viewFactory overload integration tests
+
+@MainActor
+struct IconExportServiceViewFactoryTests {
+    private func makeTempDirectory() throws -> URL {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        return tmp
+    }
+
+    /// A minimal view factory: renders a solid red square at the requested size.
+    private func solidColorFactory(_ size: CGFloat) -> AnyView {
+        AnyView(Color.red.frame(width: size, height: size))
+    }
+
+    @Test func exportCreatesAppiconsetDirectory() throws {
+        let base = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let result = try IconExportService().export(
+            viewFactory: solidColorFactory,
+            name: "TestIcon",
+            to: base
+        )
+
+        #expect(result.lastPathComponent == "TestIcon.appiconset")
+        var isDir: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: result.path, isDirectory: &isDir)
+        #expect(exists && isDir.boolValue)
+    }
+
+    @Test func exportWritesAllPNGs() throws {
+        let base = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let result = try IconExportService().export(
+            viewFactory: solidColorFactory,
+            name: "TestIcon",
+            to: base
+        )
+
+        for variant in AppIconVariant.all {
+            let file = result.appendingPathComponent(variant.filename)
+            #expect(FileManager.default.fileExists(atPath: file.path), "\(variant.filename) missing")
+        }
+    }
+
+    @Test func exportWritesValidContentsJSON() throws {
+        let base = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let result = try IconExportService().export(
+            viewFactory: solidColorFactory,
+            name: "TestIcon",
+            to: base
+        )
+
+        let contentsURL = result.appendingPathComponent("Contents.json")
+        let data = try Data(contentsOf: contentsURL)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        #expect(json != nil)
+        let images = json?["images"] as? [[String: Any]]
+        #expect(images?.count == AppIconVariant.all.count)
+    }
+
+    @Test func exportOverwritesExistingAppiconset() throws {
+        let base = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let service = IconExportService()
+        _ = try service.export(viewFactory: solidColorFactory, name: "TestIcon", to: base)
+
+        // Second export should not throw even though the directory already exists.
+        #expect(throws: Never.self) {
+            _ = try service.export(viewFactory: solidColorFactory, name: "TestIcon", to: base)
+        }
+    }
+}
