@@ -1,6 +1,6 @@
 ---
 dependencies: []
-status: backlog
+status: in-progress
 ---
 
 # Basic Editor UI Layout
@@ -36,3 +36,7 @@ Pre-populate `sourceCode` with the full text of `ScrapesBookIconView.swift` as a
 The toolbar Export button should call `NSOpenPanel` and then `IconExportService` (same flow as before) but for now leave the action body empty with a `// TODO` comment.
 
 `ExportableIcon` and `IconExportService` stay in place — they will be reused by the Export button in task 11.
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/1
