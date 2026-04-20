@@ -10,7 +10,13 @@ struct PreviewPanel: View {
     @State private var dismissTask: Task<Void, Never>?
 
     var body: some View {
-        Group {
+        ZStack {
+            // Invisible baseline fixes the panel's intrinsic size so switching
+            // between placeholder, compiling, image, and error states never
+            // causes the enclosing HSplitView to relayout.
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             if let errorMessage {
                 errorView(message: errorMessage)
             } else if let image {
@@ -19,6 +25,7 @@ struct PreviewPanel: View {
                 emptyView()
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
             if let exportMessage {
                 toastView(message: exportMessage)
