@@ -40,6 +40,14 @@ final class EditorViewModel {
 
     var exportMessage: ExportMessage?
 
+    // MARK: - Diagnostics availability
+
+    /// `true` when the most recent sourcekitd diagnostics request failed
+    /// (crash, timeout, missing toolchain, malformed response). The editor
+    /// surfaces a subtle "diagnostics unavailable" toolbar affordance while
+    /// this is set so users can distinguish clean code from a broken toolchain.
+    var diagnosticsUnavailable: Bool = false
+
     // MARK: - Services
 
     private let compiler: SwiftCompilerService

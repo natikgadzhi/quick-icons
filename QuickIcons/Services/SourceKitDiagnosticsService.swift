@@ -1,24 +1,68 @@
 import Foundation
 import SourceKittenFramework
 
+/// Result of a diagnostics request.
+///
+/// We distinguish a genuine "no diagnostics" outcome (clean code) from an
+/// unavailable toolchain / sourcekitd failure so the UI can surface a
+/// "diagnostics unavailable" affordance instead of silently implying the code
+/// is clean.
+typealias DiagnosticsResult = Result<[SwiftDiagnostic], any Error>
+
+/// Errors originating from `SourceKitDiagnosticsService` itself (as opposed to
+/// errors bubbled up from sourcekitd via SourceKittenFramework).
+enum SourceKitDiagnosticsError: Error {
+    /// The service could not write the source to a temporary file — sourcekitd
+    /// requires the input to exist on disk.
+    case tempFileWriteFailed
+}
+
+/// Abstraction over the raw sourcekitd YAML round-trip. Injected so tests can
+/// supply canned responses or simulated failures without spawning sourcekitd.
+///
+/// The response is projected into `[String: Any]` (rather than
+/// `[String: SourceKitRepresentable]`) so the test target does not need to
+/// link SourceKittenFramework to implement the protocol.
+protocol DiagnosticsRequestRunning: Sendable {
+    func run(yaml: String) async throws -> [String: Any]
+}
+
+/// Default runner — forwards to SourceKittenFramework's `Request.yamlRequest`.
+struct SourceKittenDiagnosticsRunner: DiagnosticsRequestRunning {
+    func run(yaml: String) async throws -> [String: Any] {
+        let raw = try await Request.yamlRequest(yaml: yaml).asyncSend()
+        return raw.mapValues { $0 as Any }
+    }
+}
+
 /// `SourceKitDiagnosticsService` requests real-time diagnostics for a Swift source string
 /// via SourceKittenFramework / sourcekitd, without invoking a full `swiftc` compilation.
 ///
 /// Uses `source.request.diagnostics` — the SourceKit request dedicated to returning
 /// type-checking diagnostics synchronously for a file on disk.
 ///
-/// The service never throws to the caller — any internal SourceKit failure returns an empty array.
+/// Returns a `Result` so the UI can distinguish a clean parse (empty success)
+/// from a sourcekitd failure (unavailable toolchain, crash, malformed response).
 nonisolated struct SourceKitDiagnosticsService: Sendable {
 
-    init() {}
+    private let runner: any DiagnosticsRequestRunning
+
+    init(runner: any DiagnosticsRequestRunning = SourceKittenDiagnosticsRunner()) {
+        self.runner = runner
+    }
 
     /// Returns diagnostics for `source`. Writes `source` to a temporary file and queries
     /// SourceKit's dedicated diagnostics request with the system Swift SDK.
-    /// Returns an empty array on any SourceKit failure.
-    func diagnostics(for source: String) async -> [SwiftDiagnostic] {
-        guard !source.isEmpty else { return [] }
+    ///
+    /// Returns `.success([])` for empty input or when sourcekitd returns no diagnostics.
+    /// Returns `.failure(...)` when the temp file cannot be written or sourcekitd
+    /// itself fails (crash, timeout, malformed response).
+    func diagnostics(for source: String) async -> DiagnosticsResult {
+        guard !source.isEmpty else { return .success([]) }
 
-        guard let tmpURL = writeTempFile(source) else { return [] }
+        guard let tmpURL = writeTempFile(source) else {
+            return .failure(SourceKitDiagnosticsError.tempFileWriteFailed)
+        }
         defer { try? FileManager.default.removeItem(at: tmpURL) }
 
         // Resolve the SDK path lazily on the first invocation via the shared
@@ -31,10 +75,10 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         let yaml = buildDiagnosticsYAMLRequest(path: path, compilerArgs: compilerArgs)
 
         do {
-            let response = try await Request.yamlRequest(yaml: yaml).asyncSend()
-            return parseDiagnostics(from: response)
+            let response = try await runner.run(yaml: yaml)
+            return .success(parseDiagnostics(from: response))
         } catch {
-            return []
+            return .failure(error)
         }
     }
 
@@ -88,15 +132,20 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
     }
 
     private func parseDiagnostics(
-        from response: [String: SourceKitRepresentable]
+        from response: [String: Any]
     ) -> [SwiftDiagnostic] {
-        guard let rawDiagnostics = response["key.diagnostics"] as? [[String: SourceKitRepresentable]] else {
-            return []
+        // sourcekitd may return either `[[String: SourceKitRepresentable]]`
+        // (real runs) or `[[String: Any]]` (tests) — accept either shape.
+        if let nested = response["key.diagnostics"] as? [[String: Any]] {
+            return nested.compactMap { parseDiagnostic(from: $0) }
         }
-        return rawDiagnostics.compactMap { parseDiagnostic(from: $0) }
+        if let nested = response["key.diagnostics"] as? [[String: SourceKitRepresentable]] {
+            return nested.compactMap { parseDiagnostic(from: $0.mapValues { $0 as Any }) }
+        }
+        return []
     }
 
-    private func parseDiagnostic(from dict: [String: SourceKitRepresentable]) -> SwiftDiagnostic? {
+    private func parseDiagnostic(from dict: [String: Any]) -> SwiftDiagnostic? {
         guard
             let message = dict["key.description"] as? String,
             let line = dict["key.line"] as? Int64,
