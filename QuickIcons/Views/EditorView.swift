@@ -1,5 +1,4 @@
 import AppKit
-import Darwin
 import SwiftUI
 
 private let defaultSourceCode = """
@@ -64,8 +63,15 @@ struct EditorView: View {
     @State private var fontSize: CGFloat = 13
 
     private let compiler = SwiftCompilerService()
-    private let previewer = IconPreviewService()
+    private let dylibSession: DylibSession
+    private let previewer: IconPreviewService
     private let exporter = IconExportService()
+
+    init() {
+        let session = DylibSession()
+        self.dylibSession = session
+        self.previewer = IconPreviewService(session: session)
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -182,32 +188,22 @@ struct EditorView: View {
 
         guard panel.runModal() == .OK, let baseURL = panel.url else { return }
 
-        // Look up the view factory symbol once before the export loop.
-        guard let handle = dlopen(dylibURL.path, RTLD_NOW | RTLD_LOCAL) else {
+        let factory: IconFactory
+        do {
+            factory = try dylibSession.loadIcon(at: dylibURL)
+        } catch {
             exportMessage = .error("Could not load the compiled icon. Try building again.")
             return
-        }
-        guard let sym = dlsym(handle, "_quickIconsMakeView") else {
-            dlclose(handle)
-            exportMessage = .error("Could not load the compiled icon. Try building again.")
-            return
-        }
-
-        typealias MakeViewFn = @convention(c) (Double) -> UnsafeMutableRawPointer
-        let makeView = unsafeBitCast(sym, to: MakeViewFn.self)
-
-        let viewFactory: (CGFloat) -> AnyView = { size in
-            let opaquePtr = makeView(Double(size))
-            let obj = Unmanaged<AnyObject>.fromOpaque(opaquePtr).takeRetainedValue()
-            return (obj as? AnyView) ?? AnyView(Color.clear.frame(width: size, height: size))
         }
 
         do {
-            let destination = try exporter.export(viewFactory: viewFactory, name: "AppIcon", to: baseURL)
-            dlclose(handle)
+            let destination = try exporter.export(
+                viewFactory: { factory.view(size: $0) },
+                name: "AppIcon",
+                to: baseURL
+            )
             exportMessage = .success(destination.path)
         } catch {
-            dlclose(handle)
             exportMessage = .error(error.localizedDescription)
         }
     }
