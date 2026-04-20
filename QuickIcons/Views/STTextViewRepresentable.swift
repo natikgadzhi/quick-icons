@@ -24,6 +24,17 @@ struct STTextViewRepresentable: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = STTextView.scrollableTextView()
 
+        // Hide the scrollbars — the editor is meant to feel like a clean
+        // writing surface. Trackpad and scroll-wheel scrolling still work;
+        // these knobs only suppress the visible scroller UI. `.overlay`
+        // ensures that if anything forces a scroller to appear (e.g. a
+        // future `autohidesScrollers` toggle), it floats over content
+        // instead of reserving layout space.
+        scrollView.hasVerticalScroller = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
+
         guard let textView = scrollView.documentView as? STTextView else {
             return scrollView
         }
