@@ -10,7 +10,10 @@ import Testing
 
 // MARK: - IconPreviewService Integration Tests
 
+// Serialized because compiles share `tmp/quickicons-usericon.dylib`.
+// See the note on SwiftCompilerServiceIntegrationTests.
 @MainActor
+@Suite(.serialized)
 struct IconPreviewServiceIntegrationTests {
 
     let compiler = SwiftCompilerService()

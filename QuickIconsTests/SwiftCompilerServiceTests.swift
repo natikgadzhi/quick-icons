@@ -103,7 +103,12 @@ struct SwiftCompilerServiceParserTests {
 
 // MARK: - Integration tests (actual swiftc invocation)
 
+// Serialized because all tests in this suite share the same on-disk dylib path
+// (`tmp/quickicons-usericon.dylib`). Before the main-actor-blocking fix, tests
+// serialized implicitly via `waitUntilExit()` on the main thread. The fix
+// correctly moves that off-main, so we now need an explicit guard here.
 @MainActor
+@Suite(.serialized)
 struct SwiftCompilerServiceIntegrationTests {
     let service = SwiftCompilerService()
 

@@ -23,26 +23,30 @@ typealias ProcessRunner = @Sendable ([String]) async -> ProcessResult
 /// Runs a command with the given arguments and returns the result.
 func defaultProcessRunner(_ args: [String]) async -> ProcessResult {
     await withCheckedContinuation { continuation in
-        let process = Process()
-        process.executableURL = URL(filePath: args[0])
-        process.arguments = Array(args.dropFirst())
+        // Run Process setup + waitUntilExit() off the main thread so callers
+        // on @MainActor do not block the UI while the probe runs.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.executableURL = URL(filePath: args[0])
+            process.arguments = Array(args.dropFirst())
 
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
+            let stdoutPipe = Pipe()
+            let stderrPipe = Pipe()
+            process.standardOutput = stdoutPipe
+            process.standardError = stderrPipe
 
-        do {
-            try process.run()
-        } catch {
-            continuation.resume(returning: ProcessResult(exitCode: -1, stdout: "", stderr: error.localizedDescription))
-            return
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(returning: ProcessResult(exitCode: -1, stdout: "", stderr: error.localizedDescription))
+                return
+            }
+
+            process.waitUntilExit()
+            let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            continuation.resume(returning: ProcessResult(exitCode: process.terminationStatus, stdout: stdout, stderr: stderr))
         }
-
-        process.waitUntilExit()
-        let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        continuation.resume(returning: ProcessResult(exitCode: process.terminationStatus, stdout: stdout, stderr: stderr))
     }
 }
 
