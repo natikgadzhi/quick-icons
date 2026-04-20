@@ -14,11 +14,16 @@ struct STTextViewRepresentable: NSViewRepresentable {
     @Binding var text: String
     var showsInvisibles: Bool = false
     var fontSize: CGFloat = 13
+    /// Called on the main actor whenever the diagnostics availability changes —
+    /// `true` means the latest sourcekitd diagnostics request failed (crashed,
+    /// timed out, or was unreachable) and the UI should surface an "unavailable"
+    /// affordance. `false` means the most recent request succeeded.
+    var onDiagnosticsAvailabilityChange: ((Bool) -> Void)? = nil
 
     // MARK: - NSViewRepresentable
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+        Coordinator(text: $text, onDiagnosticsAvailabilityChange: onDiagnosticsAvailabilityChange)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -137,8 +142,20 @@ struct STTextViewRepresentable: NSViewRepresentable {
         /// Shared completion service (lazy: first call spins up sourcekitd).
         private let completionService = SourceKitCompletionService()
 
-        init(text: Binding<String>) {
+        /// Callback invoked when diagnostics availability flips. See
+        /// ``STTextViewRepresentable/onDiagnosticsAvailabilityChange``.
+        private let onDiagnosticsAvailabilityChange: ((Bool) -> Void)?
+
+        /// Last reported availability state — used to avoid firing the callback
+        /// on every keystroke when the state hasn't changed.
+        private var diagnosticsUnavailable: Bool = false
+
+        init(
+            text: Binding<String>,
+            onDiagnosticsAvailabilityChange: ((Bool) -> Void)? = nil
+        ) {
             self.text = text
+            self.onDiagnosticsAvailabilityChange = onDiagnosticsAvailabilityChange
         }
 
         deinit {
@@ -213,12 +230,22 @@ struct STTextViewRepresentable: NSViewRepresentable {
                 guard let self, !Task.isCancelled else { return }
 
                 let source = textView?.text ?? ""
-                let diagnostics = await self.diagnosticsService.diagnostics(for: source)
+                let result = await self.diagnosticsService.diagnostics(for: source)
 
                 guard !Task.isCancelled else { return }
 
                 guard let textView else { return }
-                self.applyDiagnostics(diagnostics, to: textView)
+
+                switch result {
+                case .success(let diagnostics):
+                    self.updateDiagnosticsAvailability(unavailable: false)
+                    self.applyDiagnostics(diagnostics, to: textView)
+                case .failure:
+                    // Toolchain / sourcekitd failure: clear any stale markers
+                    // and notify the host so it can surface an affordance.
+                    self.updateDiagnosticsAvailability(unavailable: true)
+                    self.applyDiagnostics([], to: textView)
+                }
             }
 
             // Kick off STTextView's completion machinery. The delegate below
@@ -396,6 +423,14 @@ struct STTextViewRepresentable: NSViewRepresentable {
         }
 
         // MARK: - Diagnostics → Annotations
+
+        /// Fires the availability callback only when the state flips, so a
+        /// streak of successful (or failing) keystrokes doesn't spam the host.
+        private func updateDiagnosticsAvailability(unavailable: Bool) {
+            guard diagnosticsUnavailable != unavailable else { return }
+            diagnosticsUnavailable = unavailable
+            onDiagnosticsAvailabilityChange?(unavailable)
+        }
 
         private func applyDiagnostics(_ diagnostics: [SwiftDiagnostic], to textView: STTextView) {
             let source = textView.text ?? ""

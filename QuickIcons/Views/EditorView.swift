@@ -15,7 +15,10 @@ struct EditorView: View {
                 EditorPanel(
                     sourceCode: $model.sourceCode,
                     showsInvisibles: model.showsInvisibles,
-                    fontSize: model.fontSize
+                    fontSize: model.fontSize,
+                    onDiagnosticsAvailabilityChange: { unavailable in
+                        model.diagnosticsUnavailable = unavailable
+                    }
                 )
                 .frame(
                     minWidth: 420,
@@ -64,6 +67,15 @@ struct EditorView: View {
             model.resetZoom()
         }
         .toolbar {
+            if model.diagnosticsUnavailable {
+                ToolbarItem(placement: .status) {
+                    Label("Diagnostics unavailable", systemImage: "exclamationmark.triangle.fill")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .help("SourceKit returned an error for the last diagnostics request — inline errors may be out of date.")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task { await model.compile() }
