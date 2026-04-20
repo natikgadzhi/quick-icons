@@ -89,7 +89,7 @@ final class SwiftCompilerService {
             "-module-name", "UserIcon",
             sourceURL.path,
             "-sdk", sdkPath ?? "",
-            "-target", "arm64-apple-macosx15.0",
+            "-target", BuildEnvironment.targetTriple,
         ]
 
         let (exitCode, stderr) = await runProcess(args)

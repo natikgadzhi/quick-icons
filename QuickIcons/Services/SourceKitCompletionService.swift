@@ -238,7 +238,7 @@ public struct SourceKittenRunner: CompletionRequestRunning {
         if let sdk = sdkPath {
             args += ["-sdk", sdk]
         }
-        args += ["-target", "arm64-apple-macosx15.0"]
+        args += ["-target", BuildEnvironment.targetTriple]
         args += ["-module-name", "UserIcon"]
         return args
     }

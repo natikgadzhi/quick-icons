@@ -82,7 +82,7 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         if let sdkPath {
             args += ["-sdk", sdkPath]
         }
-        args += ["-target", "arm64-apple-macosx15.0"]
+        args += ["-target", BuildEnvironment.targetTriple]
         args += ["-module-name", "UserIcon"]
         return args
     }
