@@ -92,49 +92,80 @@ extension Theme.Colors {
     }()
 }
 
+/// Canonical list of tree-sitter-swift capture names that Xcode renders
+/// in a heavier weight than surrounding code.
+///
+/// Xcode bolds only the truly keyword-flavored captures: language keywords,
+/// conditionals/repeats, `import`-style directives, and the keyword-ish
+/// built-ins `self` / `super` / `nil`. Types (`type`, `constructor`) and
+/// function names stay at the regular weight — they're colored, not
+/// bolded — which keeps the editor visually faithful to Xcode without
+/// turning into a field of bold glyphs.
+///
+/// The tree-sitter-swift grammar emits these under
+/// `TreeSitterSwiftQueries/highlights.scm`; see `Theme.Fonts.xcode`
+/// below for how they're wired into Plugin-Neon.
+enum XcodeBoldCaptures {
+    /// Captures the theme renders in `.semibold`.
+    static let names: Set<String> = [
+        "keyword",
+        "keyword.function",
+        "keyword.return",
+        "keyword.operator",
+        "conditional",
+        "repeat",
+        "include",
+        // `self`, `super`, `nil` are tagged `variable.builtin` by the
+        // Swift tree-sitter grammar — Xcode colors them magenta and
+        // bolds them like any other keyword.
+        "variable.builtin",
+        // Markdown headings in doc comments echo the rendered
+        // Markdown hierarchy with a heavier weight.
+        "text.title",
+    ]
+
+    /// Returns `true` when the capture at `name` should render in
+    /// semibold under the Xcode-style theme.
+    static func isBold(_ name: String) -> Bool {
+        names.contains(name)
+    }
+}
+
 extension Theme.Fonts {
 
-    /// Font weights that mirror Xcode's keyword/type emphasis.
+    /// Font weights that mirror Xcode's keyword emphasis.
+    ///
+    /// Uses `NSFont.monospacedSystemFont(ofSize:weight:)` with `.semibold`
+    /// for emphasized tokens so the bold glyphs share metrics with the
+    /// regular-weight font — no baseline shift, no gutter misalignment.
+    /// The set of bold-worthy captures lives in
+    /// ``XcodeBoldCaptures/names`` so the decision is testable in
+    /// isolation from the STPluginNeon `Theme.Fonts` type.
     static let xcode: Theme.Fonts = {
-        let regular = NSFont.monospacedSystemFont(ofSize: 0, weight: .regular)
-        let medium  = NSFont.monospacedSystemFont(ofSize: 0, weight: .medium)
-        let fonts: [String: NSFont] = [
-            "plain":                 regular,
+        let regular  = NSFont.monospacedSystemFont(ofSize: 0, weight: .regular)
+        let semibold = NSFont.monospacedSystemFont(ofSize: 0, weight: .semibold)
 
-            // Keyword-flavored scopes render in medium weight, matching Xcode.
-            "keyword":               medium,
-            "keyword.function":      medium,
-            "keyword.return":        medium,
-            "keyword.operator":      medium,
-            "conditional":           medium,
-            "repeat":                medium,
-            "include":               medium,
-            "variable.builtin":      medium,
-            "text.title":            medium,
-
-            // Regular-weight scopes
-            "boolean":               regular,
-            "comment":               regular,
-            "spell":                 regular,
-            "constructor":           regular,
-            "function.call":         regular,
-            "function.macro":        regular,
-            "method":                regular,
-            "number":                regular,
-            "float":                 regular,
-            "operator":              regular,
-            "parameter":             regular,
-            "property":              regular,
-            "label":                 regular,
-            "punctuation.bracket":   regular,
-            "punctuation.delimiter": regular,
-            "punctuation.special":   regular,
-            "string":                regular,
-            "string.regex":          regular,
-            "text.literal":          regular,
-            "type":                  regular,
-            "variable":              regular,
+        // Every capture emitted by the Swift tree-sitter grammar. The
+        // weight comes from `XcodeBoldCaptures` so this table can't drift
+        // out of sync with the tested emphasis set.
+        let allCaptures: [String] = [
+            "plain",
+            "keyword", "keyword.function", "keyword.return", "keyword.operator",
+            "conditional", "repeat", "include",
+            "variable", "variable.builtin", "parameter", "property", "label",
+            "type", "constructor",
+            "method", "function.call", "function.macro",
+            "boolean", "number", "float",
+            "string", "string.regex", "text.literal",
+            "comment", "spell",
+            "operator",
+            "punctuation.bracket", "punctuation.delimiter", "punctuation.special",
+            "text.title",
         ]
+
+        let fonts: [String: NSFont] = Dictionary(uniqueKeysWithValues: allCaptures.map { name in
+            (name, XcodeBoldCaptures.isBold(name) ? semibold : regular)
+        })
         return Theme.Fonts(fonts: fonts)
     }()
 }
