@@ -1,6 +1,7 @@
 ---
 dependencies: [22-preview-pane-width]
 status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/42
 ---
 
 # Preview Pane Default Width — Actual 1/3, Not 1/2
