@@ -61,13 +61,20 @@ struct STTextViewRepresentable: NSViewRepresentable {
         // Line-number gutter
         textView.showsLineNumbers = true
 
-        // Gutter polish: separator line and markers enabled so later
-        // breakpoint/diagnostic glyphs have somewhere to render. The gutter's
-        // own highlightSelectedLine uses a different default color than the
-        // editor's, which produces a saturated mismatch on click — leave it
-        // off and let the editor-wide current-line highlight handle things.
+        // Gutter polish: separator line. Keep `areMarkersEnabled = false`
+        // (the default). In STGutterView that flag only gates the built-in
+        // mouse handlers (click-to-add, click-to-remove, drag-to-delete
+        // breakpoint markers). We don't implement breakpoints, and leaving
+        // it on let users accidentally drop dead markers by clicking the
+        // gutter. Programmatic `addMarker(_:)` — used by the diagnostic
+        // pipeline in `applyGutterMarkers` — appends to `markers` and
+        // triggers `layoutMarkers()` via `@Invalidating(.markers)`, which
+        // is independent of `areMarkersEnabled`, so diagnostic glyphs still
+        // render. The gutter's own highlightSelectedLine uses a different
+        // default color than the editor's, which produces a saturated
+        // mismatch on click — leave it off and let the editor-wide
+        // current-line highlight handle things.
         textView.gutterView?.drawSeparator = true
-        textView.gutterView?.areMarkersEnabled = true
 
         // Widen the gutter so the diagnostic marker circle has room to sit to
         // the trailing side of the line-number digit without overlapping it.
