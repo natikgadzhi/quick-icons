@@ -70,7 +70,7 @@ struct STTextViewRepresentable: NSViewRepresentable {
         textView.addPlugin(NeonPlugin(theme: .xcode, language: .swift))
 
         let annotationsPlugin = STAnnotationsPlugin(dataSource: context.coordinator)
-        context.coordinator.annotationsPlugin = annotationsPlugin
+        context.coordinator.diagnostics.annotationsPlugin = annotationsPlugin
         textView.addPlugin(annotationsPlugin)
 
         textView.text = text
@@ -100,6 +100,13 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
     // MARK: - Coordinator
 
+    /// Thin shell that adapts STTextView delegate callbacks to the SwiftUI
+    /// binding and to two focused helpers:
+    ///  - `DiagnosticsCoordinator` for diagnostics requests + annotations + gutter.
+    ///  - `CompletionCoordinator` for code-completion requests + insertion.
+    ///
+    /// The only editor concern that lives here is auto-indent, because it's
+    /// tied directly to `shouldChangeTextIn` and is tiny.
     @MainActor
     final class Coordinator: NSObject, STTextViewDelegate, STAnnotationsDataSource {
         var text: Binding<String>
@@ -114,52 +121,29 @@ struct STTextViewRepresentable: NSViewRepresentable {
         /// being intercepted again.
         private var isInsertingAutoIndent = false
 
-        /// Reference to the annotations plugin so we can trigger reloads.
-        weak var annotationsPlugin: STAnnotationsPlugin?
+        /// Diagnostics helper — owns its own debounce task and annotations plugin.
+        let diagnostics: DiagnosticsCoordinator
 
-        /// Current annotations shown in the text view.
-        var textViewAnnotations: [any STLineAnnotation] = [] {
-            didSet {
-                annotationsPlugin?.reloadAnnotations()
-            }
-        }
-
-        /// Line numbers (1-based) for gutter markers we installed from the
-        /// latest diagnostics batch. Tracked separately so subsequent updates
-        /// can remove only our markers without clobbering any user-added ones.
-        private var diagnosticMarkerLines: Set<Int> = []
-
-        /// The pending diagnostics task. Cancelled and replaced on each keystroke.
-        private var diagnosticsTask: Task<Void, Never>?
-
-        /// The pending completion task. Cancelled and replaced on each keystroke,
-        /// and automatically torn down when the Coordinator deallocates.
-        private var completionTask: Task<[any STCompletionItem]?, Never>?
-
-        /// Shared diagnostics service.
-        private let diagnosticsService = SourceKitDiagnosticsService()
-
-        /// Shared completion service (lazy: first call spins up sourcekitd).
-        private let completionService = SourceKitCompletionService()
-
-        /// Callback invoked when diagnostics availability flips. See
-        /// ``STTextViewRepresentable/onDiagnosticsAvailabilityChange``.
-        private let onDiagnosticsAvailabilityChange: ((Bool) -> Void)?
-
-        /// Last reported availability state — used to avoid firing the callback
-        /// on every keystroke when the state hasn't changed.
-        private var diagnosticsUnavailable: Bool = false
+        /// Completion helper — owns its own debounce task.
+        let completion: CompletionCoordinator
 
         init(
             text: Binding<String>,
+            diagnostics: DiagnosticsCoordinator? = nil,
+            completion: CompletionCoordinator? = nil,
             onDiagnosticsAvailabilityChange: ((Bool) -> Void)? = nil
         ) {
             self.text = text
-            self.onDiagnosticsAvailabilityChange = onDiagnosticsAvailabilityChange
+            self.diagnostics = diagnostics
+                ?? DiagnosticsCoordinator(onAvailabilityChange: onDiagnosticsAvailabilityChange)
+            self.completion = completion ?? CompletionCoordinator()
         }
 
-        deinit {
-            completionTask?.cancel()
+        // MARK: - STAnnotationsDataSource
+
+        var textViewAnnotations: [any STLineAnnotation] {
+            get { diagnostics.textViewAnnotations }
+            set { diagnostics.textViewAnnotations = newValue }
         }
 
         // MARK: - STTextViewDelegate
@@ -215,328 +199,25 @@ struct STTextViewRepresentable: NSViewRepresentable {
                 text.wrappedValue = newText
             }
 
-            // Cancel any in-flight diagnostics request, then schedule a new one
-            // with a 700ms debounce. Long enough to absorb a `.` plus the next
-            // identifier character without flashing a spurious error.
-            diagnosticsTask?.cancel()
-            diagnosticsTask = Task { [weak self, weak textView] in
-                do {
-                    try await Task.sleep(for: .milliseconds(700))
-                } catch {
-                    // Task was cancelled — a newer keystroke supersedes this one.
-                    return
-                }
+            diagnostics.scheduleDiagnostics(for: textView)
 
-                guard let self, !Task.isCancelled else { return }
-
-                let source = textView?.text ?? ""
-                let result = await self.diagnosticsService.diagnostics(for: source)
-
-                guard !Task.isCancelled else { return }
-
-                guard let textView else { return }
-
-                switch result {
-                case .success(let diagnostics):
-                    self.updateDiagnosticsAvailability(unavailable: false)
-                    self.applyDiagnostics(diagnostics, to: textView)
-                case .failure:
-                    // Toolchain / sourcekitd failure: clear any stale markers
-                    // and notify the host so it can surface an affordance.
-                    self.updateDiagnosticsAvailability(unavailable: true)
-                    self.applyDiagnostics([], to: textView)
-                }
-            }
-
-            // Kick off STTextView's completion machinery. The delegate below
-            // cancels and replaces the Coordinator-owned `completionTask`,
-            // which carries the 200ms debounce + sourcekitd round-trip.
-            // Coordinator teardown cancels any in-flight task via `deinit`.
+            // Kick off STTextView's completion machinery. The completion
+            // delegate below asks `CompletionCoordinator` for the debounced
+            // result per keystroke.
             textView.complete(self)
         }
 
-        // MARK: - Completion
+        // MARK: - Completion delegate callbacks
 
-        /// STTextView's async completion hook.
-        ///
-        /// Each invocation cancel-and-replaces the Coordinator-owned
-        /// `completionTask`, which runs the 200ms debounce and sourcekitd
-        /// round-trip. The delegate awaits that task's value so STTextView
-        /// receives a fresh, debounced result per keystroke. Returning `nil`
-        /// or `[]` dismisses the popup.
         func textView(
             _ textView: STTextView,
             completionItemsAtLocation location: any NSTextLocation
         ) async -> [any STCompletionItem]? {
-            let source = textView.text ?? ""
-            let utf16Offset = textView.textLayoutManager.offset(
-                from: textView.textLayoutManager.documentRange.location,
-                to: location
-            )
-            guard utf16Offset >= 0 else { return nil }
-            let byteOffset = utf8ByteOffset(forUTF16Offset: utf16Offset, in: source)
-
-            completionTask?.cancel()
-            let task = Task { [weak self] () -> [any STCompletionItem]? in
-                // 200ms debounce — matches the spec; diagnostics use 700ms because
-                // error annotations are higher-cost/noisier than a completion list.
-                do {
-                    try await Task.sleep(for: .milliseconds(200))
-                } catch {
-                    return nil
-                }
-                if Task.isCancelled { return nil }
-                guard let self else { return nil }
-
-                do {
-                    let items = try await self.completionService.complete(
-                        source: source,
-                        offset: byteOffset
-                    )
-                    if Task.isCancelled { return nil }
-                    return items.map { SwiftCompletionListItem(item: $0) }
-                } catch {
-                    return nil
-                }
-            }
-            completionTask = task
-            return await task.value
+            await completion.completionItems(for: textView, at: location)
         }
 
-        /// Inserts the selected completion into the text view, replacing the
-        /// identifier prefix the user already typed at the caret with the item's
-        /// `plainInsertText`. Placeholder markers (`<#…#>`) are stripped to
-        /// their visible labels; the first placeholder is selected so the user
-        /// can type over it immediately (Xcode-style "argument tab stop"
-        /// behavior, minus the rich snippet UI which STTextView does not yet
-        /// support).
         func textView(_ textView: STTextView, insertCompletionItem item: any STCompletionItem) {
-            guard let completion = item as? SwiftCompletionListItem else { return }
-            let insertText = completion.plainInsertText
-            guard !insertText.isEmpty else { return }
-
-            let source = textView.text ?? ""
-            let caretLocation = textView.textLayoutManager.insertionPointLocations.first
-                ?? textView.textLayoutManager.textSelections.first?.textRanges.first?.endLocation
-                ?? textView.textLayoutManager.documentRange.location
-            let caretUTF16 = textView.textLayoutManager.offset(
-                from: textView.textLayoutManager.documentRange.location,
-                to: caretLocation
-            )
-            let prefixLength = Self.identifierPrefixLength(
-                in: source,
-                endingAtUTF16Offset: caretUTF16
-            )
-
-            // Replace [caret - prefix, caret) with the plain insert text.
-            let replacementStartUTF16 = caretUTF16 - prefixLength
-            guard replacementStartUTF16 >= 0,
-                  let replacementStart = textView.textLayoutManager.location(
-                    textView.textLayoutManager.documentRange.location,
-                    offsetBy: replacementStartUTF16
-                  ),
-                  let replacementRange = NSTextRange(
-                    location: replacementStart,
-                    end: caretLocation
-                  ) else {
-                // Fallback: just insert at the current selection.
-                textView.insertText(insertText, replacementRange: textView.selectedRange())
-                return
-            }
-
-            textView.replaceCharacters(in: replacementRange, with: insertText)
-
-            // If the insert contains a placeholder, select its label so the
-            // user can type over it. Otherwise, leave the caret at the end.
-            if let placeholderRange = completion.firstPlaceholderUTF16Range,
-               let selectionStart = textView.textLayoutManager.location(
-                replacementStart,
-                offsetBy: placeholderRange.lowerBound
-               ),
-               let selectionEnd = textView.textLayoutManager.location(
-                replacementStart,
-                offsetBy: placeholderRange.upperBound
-               ),
-               let selectionRange = NSTextRange(location: selectionStart, end: selectionEnd) {
-                textView.textLayoutManager.textSelections = [
-                    NSTextSelection(
-                        range: selectionRange,
-                        affinity: .downstream,
-                        granularity: .character
-                    )
-                ]
-            }
-        }
-
-        /// Returns the length (in UTF-16 code units) of the identifier prefix
-        /// ending at `endingAtUTF16Offset` inside `source`. Used to decide how
-        /// much of the user's partial word to replace on completion insertion.
-        /// An identifier character is `[A-Za-z0-9_]`; this mirrors what the
-        /// SourceKit completion request considers a prefix.
-        static func identifierPrefixLength(in source: String, endingAtUTF16Offset offset: Int) -> Int {
-            guard offset > 0 else { return 0 }
-            let utf16 = source.utf16
-            guard let endIndex = utf16.index(
-                utf16.startIndex,
-                offsetBy: offset,
-                limitedBy: utf16.endIndex
-            ) else {
-                return 0
-            }
-            var count = 0
-            var cursor = endIndex
-            while cursor > utf16.startIndex {
-                let prev = utf16.index(before: cursor)
-                let unit = utf16[prev]
-                // Fast path: only ASCII identifier characters count as prefix.
-                let isIdent = (unit >= 0x30 && unit <= 0x39)          // 0-9
-                    || (unit >= 0x41 && unit <= 0x5A)                 // A-Z
-                    || (unit >= 0x61 && unit <= 0x7A)                 // a-z
-                    || unit == 0x5F                                   // _
-                if !isIdent { break }
-                count += 1
-                cursor = prev
-            }
-            return count
-        }
-
-        /// Converts a UTF-16 code-unit offset (what `NSTextLayoutManager.offset`
-        /// returns) into the UTF-8 byte offset SourceKit expects.
-        private func utf8ByteOffset(forUTF16Offset utf16Offset: Int, in source: String) -> Int {
-            guard utf16Offset > 0 else { return 0 }
-            guard let endIndex = source.utf16.index(
-                source.utf16.startIndex,
-                offsetBy: utf16Offset,
-                limitedBy: source.utf16.endIndex
-            ) else {
-                return source.utf8.count
-            }
-            // Convert the UTF-16 index to a String.Index; fall back to the
-            // full string if the offset lands mid-surrogate.
-            guard let strIndex = endIndex.samePosition(in: source) else {
-                return source.utf8.count
-            }
-            guard let utf8Index = strIndex.samePosition(in: source.utf8) else {
-                return source.utf8.count
-            }
-            return source.utf8.distance(from: source.utf8.startIndex, to: utf8Index)
-        }
-
-        // MARK: - Diagnostics → Annotations
-
-        /// Fires the availability callback only when the state flips, so a
-        /// streak of successful (or failing) keystrokes doesn't spam the host.
-        private func updateDiagnosticsAvailability(unavailable: Bool) {
-            guard diagnosticsUnavailable != unavailable else { return }
-            diagnosticsUnavailable = unavailable
-            onDiagnosticsAvailabilityChange?(unavailable)
-        }
-
-        private func applyDiagnostics(_ diagnostics: [SwiftDiagnostic], to textView: STTextView) {
-            let source = textView.text ?? ""
-            let annotations: [any STLineAnnotation] = diagnostics.compactMap { diagnostic in
-                guard let location = textLocation(forLine: diagnostic.line, in: source, textView: textView) else {
-                    return nil
-                }
-
-                let kind: STMessageLineAnnotation.AnnotationKind = switch diagnostic.severity {
-                case .error: .error
-                case .warning: .warning
-                case .note: .info
-                }
-
-                return STMessageLineAnnotation(
-                    id: "\(diagnostic.line):\(diagnostic.column):\(diagnostic.message)",
-                    message: AttributedString(diagnostic.message),
-                    kind: kind,
-                    location: location
-                )
-            }
-            textViewAnnotations = annotations
-
-            applyGutterMarkers(for: diagnostics, to: textView)
-        }
-
-        /// Installs a colored dot marker in the gutter for each diagnostic line.
-        /// The most severe diagnostic on a given line wins (error > warning > note).
-        /// Markers from the previous batch are removed before the new ones are
-        /// installed, so the pass is idempotent across keystrokes.
-        private func applyGutterMarkers(for diagnostics: [SwiftDiagnostic], to textView: STTextView) {
-            guard let gutter = textView.gutterView else { return }
-
-            // Remove markers we installed on the prior pass. User-installed
-            // markers (e.g. from clicking the gutter) are untouched because
-            // we only remove lines we own.
-            for line in diagnosticMarkerLines {
-                gutter.removeMarker(lineNumber: line)
-            }
-            diagnosticMarkerLines.removeAll(keepingCapacity: true)
-
-            // Pick the most severe diagnostic per line.
-            let worstByLine = Self.mostSevereByLine(diagnostics)
-
-            for (line, severity) in worstByLine {
-                let markerView = DiagnosticMarkerView(severity: severity)
-                gutter.addMarker(STGutterMarker(lineNumber: line, view: markerView))
-                diagnosticMarkerLines.insert(line)
-            }
-        }
-
-        /// Returns a mapping of 1-based line number → most-severe severity for that
-        /// line among `diagnostics`. Diagnostics with non-positive line numbers are
-        /// ignored. Exposed (non-private) to keep the dedup rule directly testable.
-        static func mostSevereByLine(_ diagnostics: [SwiftDiagnostic]) -> [Int: SwiftDiagnostic.Severity] {
-            var worstByLine: [Int: SwiftDiagnostic.Severity] = [:]
-            for diagnostic in diagnostics where diagnostic.line >= 1 {
-                let current = worstByLine[diagnostic.line]
-                if current == nil || severityRank(diagnostic.severity) > severityRank(current!) {
-                    worstByLine[diagnostic.line] = diagnostic.severity
-                }
-            }
-            return worstByLine
-        }
-
-        static func severityRank(_ severity: SwiftDiagnostic.Severity) -> Int {
-            switch severity {
-            case .error: return 2
-            case .warning: return 1
-            case .note: return 0
-            }
-        }
-
-        /// Converts a 1-based line number to an `NSTextLocation` inside the document.
-        /// Returns `nil` when the line is out of range.
-        func textLocation(
-            forLine line: Int,
-            in source: String,
-            textView: STTextView
-        ) -> (any NSTextLocation)? {
-            guard line >= 1 else { return nil }
-
-            let utf16Offset = utf16Offset(forLine: line, in: source)
-            guard utf16Offset >= 0 else { return nil }
-
-            return textView.textLayoutManager.location(
-                textView.textLayoutManager.documentRange.location,
-                offsetBy: utf16Offset
-            )
-        }
-
-        /// Returns the UTF-16 offset of the start of `line` (1-based) within `source`.
-        /// Returns `-1` when the line is out of range.
-        func utf16Offset(forLine line: Int, in source: String) -> Int {
-            guard line >= 1 else { return -1 }
-
-            var currentLine = 1
-            var utf16Count = 0
-            for char in source {
-                if currentLine == line { break }
-                if char == "\n" { currentLine += 1 }
-                utf16Count += char.utf16.count
-            }
-
-            guard currentLine == line else { return -1 }
-            return utf16Count
+            completion.insertCompletionItem(item, into: textView)
         }
     }
 }
@@ -549,7 +230,7 @@ struct STTextViewRepresentable: NSViewRepresentable {
 /// number. We just draw a small circle on the trailing edge; the extra
 /// `insets.trailing` configured on STGutterView reserves empty space there
 /// so the circle does not collide with the line-number digit.
-private final class DiagnosticMarkerView: NSView {
+final class DiagnosticMarkerView: NSView {
     private let fillColor: NSColor
 
     init(severity: SwiftDiagnostic.Severity) {
