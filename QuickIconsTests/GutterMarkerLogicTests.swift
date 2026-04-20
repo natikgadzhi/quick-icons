@@ -11,16 +11,18 @@ import Testing
 /// Exercises the two rules the gutter pass relies on:
 ///   - `severityRank` orders error > warning > note with distinct values.
 ///   - `mostSevereByLine` keeps the highest-severity diagnostic per line.
+///
+/// The rules live on `TextOffset` so they're testable without standing up a
+/// Coordinator or an STTextView.
 @MainActor
 struct GutterMarkerLogicTests {
-    typealias Coordinator = STTextViewRepresentable.Coordinator
 
     // MARK: - severityRank
 
     @Test func severityRankOrdersErrorAboveWarningAboveNote() {
-        let errorRank = Coordinator.severityRank(.error)
-        let warningRank = Coordinator.severityRank(.warning)
-        let noteRank = Coordinator.severityRank(.note)
+        let errorRank = TextOffset.severityRank(.error)
+        let warningRank = TextOffset.severityRank(.warning)
+        let noteRank = TextOffset.severityRank(.note)
 
         #expect(errorRank > warningRank)
         #expect(warningRank > noteRank)
@@ -28,9 +30,9 @@ struct GutterMarkerLogicTests {
 
     @Test func severityRankValuesAreDistinct() {
         let ranks: Set<Int> = [
-            Coordinator.severityRank(.error),
-            Coordinator.severityRank(.warning),
-            Coordinator.severityRank(.note),
+            TextOffset.severityRank(.error),
+            TextOffset.severityRank(.warning),
+            TextOffset.severityRank(.note),
         ]
         #expect(ranks.count == 3)
     }
@@ -44,7 +46,7 @@ struct GutterMarkerLogicTests {
             SwiftDiagnostic(line: 5, column: 1, severity: .note, message: "n"),
         ]
 
-        let worst = Coordinator.mostSevereByLine(diagnostics)
+        let worst = TextOffset.mostSevereByLine(diagnostics)
 
         #expect(worst == [5: .error])
     }
@@ -55,7 +57,7 @@ struct GutterMarkerLogicTests {
             SwiftDiagnostic(line: 3, column: 4, severity: .warning, message: "w"),
         ]
 
-        let worst = Coordinator.mostSevereByLine(diagnostics)
+        let worst = TextOffset.mostSevereByLine(diagnostics)
 
         #expect(worst == [3: .warning])
     }
@@ -68,7 +70,7 @@ struct GutterMarkerLogicTests {
             SwiftDiagnostic(line: 3, column: 1, severity: .warning, message: "w2"),
         ]
 
-        let worst = Coordinator.mostSevereByLine(diagnostics)
+        let worst = TextOffset.mostSevereByLine(diagnostics)
 
         #expect(worst == [1: .note, 2: .error, 3: .warning])
     }
@@ -79,7 +81,7 @@ struct GutterMarkerLogicTests {
             SwiftDiagnostic(line: -3, column: 1, severity: .warning, message: "w"),
         ]
 
-        let worst = Coordinator.mostSevereByLine(diagnostics)
+        let worst = TextOffset.mostSevereByLine(diagnostics)
 
         #expect(worst.isEmpty)
     }
