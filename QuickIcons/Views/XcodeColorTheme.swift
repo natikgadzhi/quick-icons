@@ -50,7 +50,7 @@ extension Theme.Colors {
             "conditional":           keyword,
             "repeat":                keyword,
             "include":               keyword,
-            "variable.builtin":      keyword,  // self, super, nil — Xcode bolds in magenta
+            "variable.builtin":      keyword,  // self, super, nil — Xcode colors in magenta
 
             // Types
             "type":                  type_,
@@ -107,62 +107,17 @@ extension Theme.Colors {
     }()
 }
 
-/// Canonical list of tree-sitter-swift capture names that Xcode renders
-/// in a heavier weight than surrounding code.
-///
-/// Xcode bolds only the truly keyword-flavored captures: language keywords,
-/// conditionals/repeats, `import`-style directives, and the keyword-ish
-/// built-ins `self` / `super` / `nil`. Types (`type`, `constructor`) and
-/// function names stay at the regular weight — they're colored, not
-/// bolded — which keeps the editor visually faithful to Xcode without
-/// turning into a field of bold glyphs.
-///
-/// The tree-sitter-swift grammar emits these under
-/// `TreeSitterSwiftQueries/highlights.scm`; see `Theme.Fonts.xcode`
-/// below for how they're wired into Plugin-Neon.
-enum XcodeBoldCaptures {
-    /// Captures the theme renders in `.semibold`.
-    static let names: Set<String> = [
-        "keyword",
-        "keyword.function",
-        "keyword.return",
-        "keyword.operator",
-        "conditional",
-        "repeat",
-        "include",
-        // `self`, `super`, `nil` are tagged `variable.builtin` by the
-        // Swift tree-sitter grammar — Xcode colors them magenta and
-        // bolds them like any other keyword.
-        "variable.builtin",
-        // Markdown headings in doc comments echo the rendered
-        // Markdown hierarchy with a heavier weight.
-        "text.title",
-    ]
-
-    /// Returns `true` when the capture at `name` should render in
-    /// semibold under the Xcode-style theme.
-    static func isBold(_ name: String) -> Bool {
-        names.contains(name)
-    }
-}
-
 extension Theme.Fonts {
 
-    /// Font weights that mirror Xcode's keyword emphasis.
-    ///
-    /// Uses `NSFont.monospacedSystemFont(ofSize:weight:)` with `.semibold`
-    /// for emphasized tokens so the bold glyphs share metrics with the
-    /// regular-weight font — no baseline shift, no gutter misalignment.
-    /// The set of bold-worthy captures lives in
-    /// ``XcodeBoldCaptures/names`` so the decision is testable in
-    /// isolation from the STPluginNeon `Theme.Fonts` type.
+    /// Xcode-style font table. Xcode's stock themes render every capture
+    /// at the regular monospaced weight — emphasis is color-based, not
+    /// weight-based — so every scope resolves to the same regular-weight
+    /// `NSFont.monospacedSystemFont(ofSize:weight:)`.
     static let xcode: Theme.Fonts = {
-        let regular  = NSFont.monospacedSystemFont(ofSize: 0, weight: .regular)
-        let semibold = NSFont.monospacedSystemFont(ofSize: 0, weight: .semibold)
+        let regular = NSFont.monospacedSystemFont(ofSize: 0, weight: .regular)
 
-        // Every capture emitted by the Swift tree-sitter grammar. The
-        // weight comes from `XcodeBoldCaptures` so this table can't drift
-        // out of sync with the tested emphasis set.
+        // Every capture emitted by the Swift tree-sitter grammar, plus
+        // the locals captures layered on top by `LocalNeonPlugin`.
         let allCaptures: [String] = [
             "plain",
             "keyword", "keyword.function", "keyword.return", "keyword.operator",
@@ -181,9 +136,9 @@ extension Theme.Fonts {
             "local.reference", "local.definition",
         ]
 
-        let fonts: [String: NSFont] = Dictionary(uniqueKeysWithValues: allCaptures.map { name in
-            (name, XcodeBoldCaptures.isBold(name) ? semibold : regular)
-        })
+        let fonts: [String: NSFont] = Dictionary(
+            uniqueKeysWithValues: allCaptures.map { ($0, regular) }
+        )
         return Theme.Fonts(fonts: fonts)
     }()
 }
