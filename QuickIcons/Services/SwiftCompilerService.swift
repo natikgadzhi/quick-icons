@@ -154,25 +154,29 @@ public func _quickIconsMakeView(_ size: Double) -> UnsafeMutableRawPointer {
 
     private func runProcess(_ args: [String]) async -> (exitCode: Int32, stderr: String) {
         await withCheckedContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: args[0])
-            process.arguments = Array(args.dropFirst())
+            // Run Process setup + waitUntilExit() off the main thread so the
+            // @MainActor caller does not block the UI during compilation.
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: args[0])
+                process.arguments = Array(args.dropFirst())
 
-            let stderrPipe = Pipe()
-            process.standardOutput = Pipe() // discard stdout
-            process.standardError = stderrPipe
+                let stderrPipe = Pipe()
+                process.standardOutput = Pipe() // discard stdout
+                process.standardError = stderrPipe
 
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(returning: (-1, "Failed to launch swiftc: \(error.localizedDescription)"))
-                return
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(returning: (-1, "Failed to launch swiftc: \(error.localizedDescription)"))
+                    return
+                }
+
+                process.waitUntilExit()
+                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+                continuation.resume(returning: (process.terminationStatus, stderr))
             }
-
-            process.waitUntilExit()
-            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            let stderr = String(data: stderrData, encoding: .utf8) ?? ""
-            continuation.resume(returning: (process.terminationStatus, stderr))
         }
     }
 
