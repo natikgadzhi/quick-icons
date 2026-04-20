@@ -29,3 +29,7 @@ state, and image state have different intrinsic sizes.
 ## Out of Scope
 
 - Animating state transitions.
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/45
