@@ -18,21 +18,51 @@ struct QuickIconsApp: App {
             AppRouterView()
         }
         .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("Open…") {
-                    openSwiftFile()
-                }
-                .keyboardShortcut("o", modifiers: .command)
-            }
-
+            OpenFileCommand()
             BuildExportCommands()
             ViewMenuCommands()
         }
     }
+}
 
-    /// Presents an NSOpenPanel for .swift files and, on success, posts an
-    /// openSwiftFileNotification so EditorView can replace its source code.
+// MARK: - Focused value: the editor's view model
+
+/// Exposes the currently focused ``EditorViewModel`` so menu `Commands`
+/// scenes can call model methods directly instead of going through
+/// NotificationCenter.
+struct EditorViewModelKey: FocusedValueKey {
+    typealias Value = EditorViewModel
+}
+
+extension FocusedValues {
+    var editorViewModel: EditorViewModel? {
+        get { self[EditorViewModelKey.self] }
+        set { self[EditorViewModelKey.self] = newValue }
+    }
+}
+
+// MARK: - File menu
+
+/// Replaces the default "New" item with an "Open…" command that loads a
+/// Swift file into the focused editor's view model.
+struct OpenFileCommand: Commands {
+    @FocusedValue(\.editorViewModel) private var model
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("Open…") {
+                openSwiftFile()
+            }
+            .keyboardShortcut("o", modifiers: .command)
+            .disabled(model == nil)
+        }
+    }
+
+    /// Presents an NSOpenPanel for .swift files and hands the chosen URL to
+    /// the focused ``EditorViewModel``.
     private func openSwiftFile() {
+        guard let model else { return }
+
         let panel = NSOpenPanel()
         panel.title = "Open Swift File"
         panel.prompt = "Open"
@@ -43,138 +73,81 @@ struct QuickIconsApp: App {
         panel.canChooseFiles = true
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        do {
-            let source = try readSwiftSource(at: url)
-            NotificationCenter.default.post(
-                name: .openSwiftFileNotification,
-                object: nil,
-                userInfo: [OpenSwiftFileNotification.sourceKey: source]
-            )
-        } catch {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "Could Not Open File"
-            alert.informativeText = error.localizedDescription
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
-        }
-    }
-}
-
-// MARK: - Open file notification
-
-/// Namespace for the notification posted when a Swift file is successfully opened.
-enum OpenSwiftFileNotification {
-    static let sourceKey = "source"
-}
-
-extension Notification.Name {
-    static let openSwiftFileNotification = Notification.Name("QuickIcons.OpenSwiftFile")
-    static let buildRequested = Notification.Name("QuickIcons.BuildRequested")
-    static let exportRequested = Notification.Name("QuickIcons.ExportRequested")
-    static let toggleInvisibleCharacters = Notification.Name("QuickIcons.ToggleInvisibleCharacters")
-    static let zoomIn = Notification.Name("QuickIcons.ZoomIn")
-    static let zoomOut = Notification.Name("QuickIcons.ZoomOut")
-    static let resetZoom = Notification.Name("QuickIcons.ResetZoom")
-}
-
-// MARK: - Build / Export focused value
-
-/// Key for exposing `hasCompiledIcon` from EditorView to the menu commands.
-struct HasCompiledIconKey: FocusedValueKey {
-    typealias Value = Bool
-}
-
-extension FocusedValues {
-    var hasCompiledIcon: Bool? {
-        get { self[HasCompiledIconKey.self] }
-        set { self[HasCompiledIconKey.self] = newValue }
-    }
-}
-
-/// Key mirroring EditorView's `showsInvisibles` state so the View menu
-/// item can render its checkmark based on the currently focused scene.
-struct ShowsInvisiblesKey: FocusedValueKey {
-    typealias Value = Bool
-}
-
-extension FocusedValues {
-    var showsInvisibles: Bool? {
-        get { self[ShowsInvisiblesKey.self] }
-        set { self[ShowsInvisiblesKey.self] = newValue }
+        model.openFile(at: url)
     }
 }
 
 // MARK: - Build / Export menu commands
 
 struct BuildExportCommands: Commands {
-    @FocusedValue(\.hasCompiledIcon) private var hasCompiledIcon
+    @FocusedValue(\.editorViewModel) private var model
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
             Divider()
 
             Button {
-                NotificationCenter.default.post(name: .buildRequested, object: nil)
+                guard let model else { return }
+                Task { await model.compile() }
             } label: {
                 Label("Build", systemImage: "hammer.fill")
             }
             .keyboardShortcut("b", modifiers: .command)
+            .disabled(model == nil)
 
             Button {
-                NotificationCenter.default.post(name: .exportRequested, object: nil)
+                model?.export()
             } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
-            .disabled(!(hasCompiledIcon ?? false))
+            .disabled(!(model?.hasCompiledIcon ?? false))
         }
     }
 }
 
 // MARK: - View menu commands
 
-/// Adds "Show Invisible Characters" to the View menu. The checkmark mirrors
-/// EditorView's `showsInvisibles` state via a focused scene value; the action
-/// posts a notification that EditorView's `.onReceive` handler toggles.
+/// Adds "Show Invisible Characters" plus Zoom controls to the View menu.
+/// Each action calls the focused ``EditorViewModel`` directly.
 struct ViewMenuCommands: Commands {
-    @FocusedValue(\.showsInvisibles) private var showsInvisibles
+    @FocusedValue(\.editorViewModel) private var model
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
             Divider()
 
             // `Toggle` inside a CommandGroup renders as a checked menu item
-            // on macOS. Writing to the binding posts the toggle notification;
-            // the getter reflects the focused scene's current state.
+            // on macOS. The getter reflects the focused model's current state;
+            // the setter invokes `toggleInvisibles()`.
             Toggle(isOn: Binding(
-                get: { showsInvisibles ?? false },
-                set: { _ in
-                    NotificationCenter.default.post(name: .toggleInvisibleCharacters, object: nil)
-                }
+                get: { model?.showsInvisibles ?? false },
+                set: { _ in model?.toggleInvisibles() }
             )) {
                 Text("Show Invisible Characters")
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
-            .disabled(showsInvisibles == nil)
+            .disabled(model == nil)
 
             Divider()
 
             Button("Zoom In") {
-                NotificationCenter.default.post(name: .zoomIn, object: nil)
+                model?.zoomIn()
             }
             .keyboardShortcut("+", modifiers: .command)
+            .disabled(model == nil)
 
             Button("Zoom Out") {
-                NotificationCenter.default.post(name: .zoomOut, object: nil)
+                model?.zoomOut()
             }
             .keyboardShortcut("-", modifiers: .command)
+            .disabled(model == nil)
 
             Button("Actual Size") {
-                NotificationCenter.default.post(name: .resetZoom, object: nil)
+                model?.resetZoom()
             }
             .keyboardShortcut("0", modifiers: .command)
+            .disabled(model == nil)
         }
     }
 }
