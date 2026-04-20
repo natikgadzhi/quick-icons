@@ -1,6 +1,7 @@
 ---
 dependencies: [29-gutter-error-markers, 32-error-marker-around-line-number]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/47
 ---
 
 # Disable Click-to-Add Breakpoint Markers in Gutter

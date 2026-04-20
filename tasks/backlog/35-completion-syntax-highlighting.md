@@ -1,6 +1,7 @@
 ---
 dependencies: [27-sourcekit-completions]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/50
 ---
 
 # Syntax-Highlighted Completion Items

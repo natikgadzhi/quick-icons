@@ -1,6 +1,7 @@
 ---
 dependencies: [05-syntax-highlighting, 15-xcode-color-theme]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/49
 ---
 
 # Bold Font Weights for Xcode-style Syntax Highlighting
