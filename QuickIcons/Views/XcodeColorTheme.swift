@@ -87,21 +87,6 @@ extension Theme.Colors {
 
             // Markdown-ish (kept from previous theme, no-op for Swift)
             "text.title":            keyword,
-
-            // Locals query captures (from TreeSitterSwiftQueries/locals.scm,
-            // surfaced by LocalNeonPlugin on top of the stock highlights
-            // stream). These are emitted AFTER the highlights tokens, so
-            // they layer on top and give locally-scoped identifiers their
-            // own color. The Swift grammar's locals.scm is minimal — it
-            // emits `definition.function` for function-name bindings and
-            // `definition.import` for imported module names. `local.scope`
-            // covers whole regions and is filtered out before it reaches
-            // the theme (see LocalNeonCoordinator.localsTokens).
-            "definition.function":   functionCall,
-            "definition.import":     keyword,
-            "definition":            plain,
-            "local.reference":       plain,
-            "local.definition":      plain,
         ]
         return Theme.Colors(colors: colors)
     }()
@@ -131,9 +116,6 @@ extension Theme.Fonts {
             "operator",
             "punctuation.bracket", "punctuation.delimiter", "punctuation.special",
             "text.title",
-            // Locals captures — see comment in Theme.Colors.xcode.
-            "definition.function", "definition.import", "definition",
-            "local.reference", "local.definition",
         ]
 
         let fonts: [String: NSFont] = Dictionary(
