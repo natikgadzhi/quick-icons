@@ -15,6 +15,27 @@ public struct SwiftCompletionItem: Sendable, Equatable {
     public let kind: CompletionKind
     public let typeName: String?
 
+    /// The SourceKit `sourcetext` stripped of `<#...#>` placeholder markers —
+    /// suitable for plain-text insertion into an editor that does not support
+    /// snippet placeholders.
+    ///
+    /// SourceKit emits two placeholder shapes:
+    ///   * Typed:  `<#T##label##Type#>` — we surface `label`.
+    ///   * Simple: `<#label#>`          — we surface `label`.
+    ///
+    /// Everything outside the markers is passed through verbatim so operators,
+    /// parentheses, commas, etc. remain intact.
+    ///
+    /// Computed once at init from `sourcetext` and cached so repeated reads
+    /// (popup display + insertion) don't re-parse the template.
+    public let plainInsertText: String
+
+    /// UTF-16 range of the first placeholder inside `plainInsertText`, or
+    /// `nil` when the sourcetext contains no placeholders. Callers use this to
+    /// position the caret / selection so the user can immediately type over
+    /// the first argument.
+    public let firstPlaceholderUTF16Range: Range<Int>?
+
     public init(
         name: String,
         description: String,
@@ -27,6 +48,60 @@ public struct SwiftCompletionItem: Sendable, Equatable {
         self.sourcetext = sourcetext
         self.kind = kind
         self.typeName = typeName
+        let stripped = Self.strippedSourceText(sourcetext)
+        self.plainInsertText = stripped.text
+        self.firstPlaceholderUTF16Range = stripped.firstPlaceholder
+    }
+
+    /// Parses `sourcetext`, returning the plain visible text and the UTF-16
+    /// range of the first placeholder within that text.
+    static func strippedSourceText(_ sourcetext: String) -> (text: String, firstPlaceholder: Range<Int>?) {
+        var output = ""
+        var firstPlaceholder: Range<Int>?
+        var utf16Offset = 0
+
+        var remaining = Substring(sourcetext)
+        while let openRange = remaining.range(of: "<#") {
+            // Append the literal prefix before the placeholder opener.
+            let prefix = remaining[remaining.startIndex..<openRange.lowerBound]
+            output.append(contentsOf: prefix)
+            utf16Offset += prefix.utf16.count
+
+            let afterOpen = remaining[openRange.upperBound...]
+            guard let closeRange = afterOpen.range(of: "#>") else {
+                // Unterminated placeholder — treat the rest as literal text.
+                output.append(contentsOf: remaining[openRange.lowerBound...])
+                break
+            }
+
+            let body = afterOpen[afterOpen.startIndex..<closeRange.lowerBound]
+            let visible = visibleLabel(for: body)
+            let startUTF16 = utf16Offset
+            output.append(contentsOf: visible)
+            utf16Offset += visible.utf16.count
+            if firstPlaceholder == nil && !visible.isEmpty {
+                firstPlaceholder = startUTF16..<utf16Offset
+            }
+
+            remaining = afterOpen[closeRange.upperBound...]
+        }
+
+        output.append(contentsOf: remaining)
+        return (output, firstPlaceholder)
+    }
+
+    /// Extracts the visible label from a placeholder body.
+    /// Typed form `T##label##Type` → `label`; simple form `label` → `label`.
+    private static func visibleLabel(for body: Substring) -> Substring {
+        if body.hasPrefix("T##") {
+            // Drop the leading "T##" then take everything up to the next "##".
+            let afterT = body.dropFirst(3)
+            if let sep = afterT.range(of: "##") {
+                return afterT[afterT.startIndex..<sep.lowerBound]
+            }
+            return afterT
+        }
+        return body
     }
 }
 
@@ -47,9 +122,15 @@ public enum CompletionKind: String, Sendable, Equatable, CaseIterable {
     case globalVar
     case keyword
     case module
+    case literal
     case other
 
     /// SF Symbol name used by stage 3 for the completion popup icon.
+    ///
+    /// All names are standard SF Symbols shipped with macOS: the `{letter}.square`
+    /// family, `questionmark.square`, `number.square`, `shippingbox`, and
+    /// `circle.*`. Tests ensure every case resolves to a non-empty symbol name;
+    /// missing symbols would render as a blank icon rather than crash.
     public var sfSymbolName: String {
         switch self {
         case .function:   return "f.square"
@@ -57,14 +138,15 @@ public enum CompletionKind: String, Sendable, Equatable, CaseIterable {
         case .class:      return "c.square"
         case .struct:     return "s.square"
         case .enum:       return "e.square"
-        case .enumCase:   return "circle.hexagongrid"
+        case .enumCase:   return "e.square"
         case .protocol:   return "p.square"
         case .typealias:  return "t.square"
-        case .property:   return "circle.dotted"
+        case .property:   return "v.square"
         case .localVar:   return "v.square"
-        case .globalVar:  return "g.square"
+        case .globalVar:  return "v.square"
         case .keyword:    return "k.square"
         case .module:     return "shippingbox"
+        case .literal:    return "number.square"
         case .other:      return "questionmark.square"
         }
     }
@@ -72,9 +154,11 @@ public enum CompletionKind: String, Sendable, Equatable, CaseIterable {
     /// Maps a SourceKit `key.kind` UID (e.g. `source.lang.swift.decl.function.method.instance`)
     /// to our closed set. Unknown kinds bucket into `.other`.
     public static func from(sourceKitKind raw: String) -> CompletionKind {
-        // Keyword and module kinds come first — they are distinct top-level UIDs.
+        // Keyword, module, and literal kinds come first — they are distinct
+        // top-level UIDs that don't fit the `.decl.*` hierarchy below.
         if raw.contains("keyword") { return .keyword }
         if raw.hasSuffix(".module") { return .module }
+        if raw.contains(".literal") { return .literal }
 
         // Decl kinds — order matters because we match on the most specific suffix.
         if raw.contains(".enumelement") || raw.contains(".enumcase") { return .enumCase }

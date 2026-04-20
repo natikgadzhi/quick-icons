@@ -7,6 +7,7 @@ status: in-progress
 
 - Stage 1 (service + tests): https://github.com/natikgadzhi/quick-icons/pull/37
 - Stage 2 (delegate wiring + debounce + popup): https://github.com/natikgadzhi/quick-icons/pull/39
+- Stage 3 (completion polish: icons, placeholders, insertion): https://github.com/natikgadzhi/quick-icons/pull/46
 
 # SourceKit-backed Code Completion
 
