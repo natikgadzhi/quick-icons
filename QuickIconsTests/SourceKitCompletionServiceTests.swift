@@ -245,4 +245,96 @@ struct SourceKitCompletionServiceTests {
         #expect(item.plainInsertText == "pair(a, b)")
         #expect(item.firstPlaceholderUTF16Range == 5..<6)
     }
+
+    // MARK: - Annotated description parser
+
+    /// Plain strings (no XML-like tags) yield `nil` so the view layer falls
+    /// back to its plain-text rendering path.
+    @Test func parserRejectsUntaggedStrings() {
+        #expect(AnnotatedDescriptionParser.parse("print(items: Any...)") == nil)
+        #expect(AnnotatedDescriptionParser.parse("") == nil)
+        #expect(AnnotatedDescriptionParser.parse("return") == nil)
+    }
+
+    /// A typical annotated-completion description: name + parenthesized
+    /// argument label + type reference, each in its own run.
+    @Test func parserSplitsCompletionDescription() throws {
+        let xml = "<name>print</name>(<callarg.param>items</callarg.param>: <typeid.sys>Any</typeid.sys>)"
+        let runs = try #require(AnnotatedDescriptionParser.parse(xml))
+
+        // Expected run list: "print" | "(" | "items" | ": " | "Any" | ")"
+        // Adjacent plain runs coalesce, so punctuation lands in two runs.
+        #expect(runs.map(\.text) == ["print", "(", "items", ": ", "Any", ")"])
+        #expect(runs.map(\.kind) == [.declName, .plain, .parameter, .plain, .typeRef, .plain])
+    }
+
+    /// Keyword completions surface the `keyword` tag.
+    @Test func parserRecognizesKeywordTag() throws {
+        let runs = try #require(AnnotatedDescriptionParser.parse("<keyword>return</keyword>"))
+        #expect(runs.count == 1)
+        #expect(runs[0].text == "return")
+        #expect(runs[0].kind == .keyword)
+    }
+
+    /// The richer cursor-info vocabulary (`<Declaration><Type>…`) also parses.
+    /// `Declaration` is a transparent container; inner `Type` spans become
+    /// `.typeRef` runs.
+    @Test func parserHandlesAnnotatedDecl() throws {
+        let xml = "<Declaration>let x: <Type>Int</Type></Declaration>"
+        let runs = try #require(AnnotatedDescriptionParser.parse(xml))
+        #expect(runs.map(\.text) == ["let x: ", "Int"])
+        #expect(runs.map(\.kind) == [.plain, .typeRef])
+    }
+
+    /// XML entity references decode back to their literal characters so
+    /// generic syntax like `Array<Int>` displays without escaping.
+    @Test func parserDecodesEntities() throws {
+        let xml = "<Type>Array&lt;Int&gt;</Type>"
+        let runs = try #require(AnnotatedDescriptionParser.parse(xml))
+        #expect(runs.count == 1)
+        #expect(runs[0].text == "Array<Int>")
+        #expect(runs[0].kind == .typeRef)
+    }
+
+    /// Unknown tags become transparent — their content joins the surrounding
+    /// plain context instead of dropping out of the display.
+    @Test func parserTreatsUnknownTagsAsPlain() throws {
+        let xml = "hello <mystery>world</mystery>!"
+        let runs = try #require(AnnotatedDescriptionParser.parse(xml))
+        #expect(runs.count == 1)
+        #expect(runs[0].text == "hello world!")
+        #expect(runs[0].kind == .plain)
+    }
+
+    /// End-to-end: SourceKit-style annotated response flows through
+    /// `parse(item:)` and lands on the projected `SwiftCompletionItem` with
+    /// both a tag-stripped `description` and a run list.
+    @Test func parseItemPopulatesAnnotatedDescription() throws {
+        let dict: [String: Any] = [
+            "key.kind":        "source.lang.swift.decl.function.free",
+            "key.name":        "max(_:_:)",
+            "key.description": "<name>max</name>(<callarg.param>a</callarg.param>: <typeid.sys>Int</typeid.sys>, <callarg.param>b</callarg.param>: <typeid.sys>Int</typeid.sys>)",
+            "key.sourcetext":  "max(<#T##a: Int##Int#>, <#T##b: Int##Int#>)",
+            "key.typename":    "Int"
+        ]
+        let item = try #require(SourceKitCompletionService.parse(item: dict))
+
+        #expect(item.description == "max(a: Int, b: Int)")
+        let runs = try #require(item.annotatedDescription)
+        #expect(runs.map(\.kind) == [.declName, .plain, .parameter, .plain, .typeRef, .plain, .parameter, .plain, .typeRef, .plain])
+    }
+
+    /// When the response has no annotated markup, `annotatedDescription` is
+    /// left nil and `description` is preserved verbatim.
+    @Test func parseItemLeavesAnnotationNilForPlainDescription() throws {
+        let dict: [String: Any] = [
+            "key.kind":        "source.lang.swift.keyword",
+            "key.name":        "return",
+            "key.description": "return",
+            "key.sourcetext":  "return"
+        ]
+        let item = try #require(SourceKitCompletionService.parse(item: dict))
+        #expect(item.annotatedDescription == nil)
+        #expect(item.description == "return")
+    }
 }
