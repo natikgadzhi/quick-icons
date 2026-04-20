@@ -23,107 +23,51 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = STTextView.scrollableTextView()
-
-        // Hide the scrollbars — the editor is meant to feel like a clean
-        // writing surface. Trackpad and scroll-wheel scrolling still work;
-        // these knobs only suppress the visible scroller UI. `.overlay`
-        // ensures that if anything forces a scroller to appear (e.g. a
-        // future `autohidesScrollers` toggle), it floats over content
-        // instead of reserving layout space.
         scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
         scrollView.scrollerStyle = .overlay
 
         guard let textView = scrollView.documentView as? STTextView else {
             return scrollView
         }
 
-        // Appearance
         textView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         textView.isHorizontallyResizable = false
 
-        // Paragraph style: give each line ~20% extra breathing room, matching
-        // Xcode's default editor density. Both STTextView demos set this knob.
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineHeightMultiple = 1.2
         textView.defaultParagraphStyle = paragraphStyle
 
-        // Editor-level polish: incremental ⌘F, no font-panel hijack of ⌘T,
-        // and an initial state for the View → Show Invisible Characters toggle.
         textView.isIncrementalSearchingEnabled = true
         textView.usesFontPanel = false
         textView.showsInvisibleCharacters = showsInvisibles
 
-        // Current-line highlight: matches Xcode's default editor behavior.
-        // Light: #E8F0FE (faint blue-grey); Dark: ~8% white on the dark background.
-        // NSColor(name:dynamicProvider:) resolves on every appearance change without
-        // requiring an app restart.  STTextView hides the highlight automatically
-        // when the selection spans more than a single insertion point — matching
-        // Xcode's multi-line-selection behavior exactly.
         textView.highlightSelectedLine = true
         textView.selectedLineHighlightColor = NSColor(name: "xcodeCurrentLine") { appearance in
             switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
-            case .darkAqua: return NSColor(white: 1.0, alpha: 0.08)   // ~8% white
-            default:        return NSColor(srgbRed: 0xE8/255, green: 0xF0/255, blue: 0xFE/255, alpha: 1.0) // #E8F0FE
+            case .darkAqua: return NSColor(white: 1.0, alpha: 0.08)
+            default:        return NSColor(rgb: 0xE8F0FE)
             }
         }
 
-        // Line-number gutter
         textView.showsLineNumbers = true
 
-        // Gutter polish: separator line. Keep `areMarkersEnabled = false`
-        // (the default). In STGutterView that flag only gates the built-in
-        // mouse handlers (click-to-add, click-to-remove, drag-to-delete
-        // breakpoint markers). We don't implement breakpoints, and leaving
-        // it on let users accidentally drop dead markers by clicking the
-        // gutter. Programmatic `addMarker(_:)` — used by the diagnostic
-        // pipeline in `applyGutterMarkers` — appends to `markers` and
-        // triggers `layoutMarkers()` via `@Invalidating(.markers)`, which
-        // is independent of `areMarkersEnabled`, so diagnostic glyphs still
-        // render. The gutter's own highlightSelectedLine uses a different
-        // default color than the editor's, which produces a saturated
-        // mismatch on click — leave it off and let the editor-wide
-        // current-line highlight handle things.
-        textView.gutterView?.drawSeparator = true
-
-        // Widen the gutter so the diagnostic marker circle has room to sit to
-        // the trailing side of the line-number digit without overlapping it.
-        // STGutterLineNumberCell draws the digit right-aligned with
-        // `insets.trailing` as the right-edge padding, so bumping the trailing
-        // inset pushes the digits left and reserves empty space on the right
-        // where DiagnosticMarkerView.draw(_:) paints its circle.
-        if let gutterView = textView.gutterView {
-            gutterView.insets = STRulerInsets(leading: 4.0, trailing: 20.0)
-            gutterView.minimumThickness = max(gutterView.minimumThickness, 50)
+        // Trailing inset reserves empty space for DiagnosticMarkerView's circle
+        // so it doesn't overlap the right-aligned line-number digit.
+        if let gutter = textView.gutterView {
+            gutter.drawSeparator = true
+            gutter.insets = STRulerInsets(leading: 4.0, trailing: 20.0)
+            gutter.minimumThickness = max(gutter.minimumThickness, 50)
+            gutter.textColor = NSColor.xcodeToken(light: 0x8A9BAC, dark: 0x6C7986)
         }
 
-        // Delegate for text-change callbacks
         textView.textDelegate = context.coordinator
-
-        // Swift syntax highlighting via Plugin-Neon (tree-sitter).
-        // Theme.xcode mirrors Xcode's stock "Default (Light / Dark)" palette and
-        // resolves dynamically per appearance — no restart required.
         textView.addPlugin(NeonPlugin(theme: .xcode, language: .swift))
 
-        // Gutter: use Xcode's line-number text color (dynamic, light/dark).
-        // STGutterView.backgroundColor is internal, so background is left to the
-        // default NSVisualEffectView which already matches the editor tone.
-        textView.gutterView?.textColor = NSColor(name: nil) { appearance in
-            switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
-            case .darkAqua: return NSColor(srgbRed: 0x6C/255, green: 0x79/255, blue: 0x86/255, alpha: 1)
-            default:        return NSColor(srgbRed: 0x8A/255, green: 0x9B/255, blue: 0xAC/255, alpha: 1)
-            }
-        }
-
-        // Inline diagnostics via Plugin-Annotations.
-        // The coordinator acts as data source; we keep a reference so the
-        // coordinator can call reloadAnnotations() after updating its array.
         let annotationsPlugin = STAnnotationsPlugin(dataSource: context.coordinator)
         context.coordinator.annotationsPlugin = annotationsPlugin
         textView.addPlugin(annotationsPlugin)
 
-        // Set initial content
         textView.text = text
 
         return scrollView

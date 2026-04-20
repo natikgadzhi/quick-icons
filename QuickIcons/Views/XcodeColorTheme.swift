@@ -94,16 +94,9 @@ extension Theme.Colors {
 
 extension Theme.Fonts {
 
-    /// Xcode-style font table. Xcode's stock themes render every capture
-    /// at the regular monospaced weight — emphasis is color-based, not
-    /// weight-based — so every scope resolves to the same regular-weight
-    /// `NSFont.monospacedSystemFont(ofSize:weight:)`.
     static let xcode: Theme.Fonts = {
         let regular = NSFont.monospacedSystemFont(ofSize: 0, weight: .regular)
-
-        // Every capture emitted by the Swift tree-sitter grammar, plus
-        // the locals captures layered on top by `LocalNeonPlugin`.
-        let allCaptures: [String] = [
+        let captures = [
             "plain",
             "keyword", "keyword.function", "keyword.return", "keyword.operator",
             "conditional", "repeat", "include",
@@ -117,29 +110,18 @@ extension Theme.Fonts {
             "punctuation.bracket", "punctuation.delimiter", "punctuation.special",
             "text.title",
         ]
-
-        let fonts: [String: NSFont] = Dictionary(
-            uniqueKeysWithValues: allCaptures.map { ($0, regular) }
-        )
-        return Theme.Fonts(fonts: fonts)
+        return Theme.Fonts(fonts: Dictionary(uniqueKeysWithValues: captures.map { ($0, regular) }))
     }()
 }
 
 // MARK: - Dynamic color helper
 
-private extension NSColor {
+extension NSColor {
 
-    /// Returns a dynamic `NSColor` that resolves to `light` in light appearances
-    /// and `dark` in dark appearances.  Uses `NSColor(name:dynamicProvider:)` so
-    /// the system re-queries the provider whenever the effective appearance changes.
-    ///
-    /// - Parameters:
-    ///   - light: 24-bit RGB hex value for light appearance (e.g. `0xAD3DA4`)
-    ///   - dark:  24-bit RGB hex value for dark appearance  (e.g. `0xFF7AB2`)
+    /// Dynamic color that swaps between two 24-bit RGB values per appearance.
     static func xcodeToken(light lightRGB: Int, dark darkRGB: Int) -> NSColor {
         let lightColor = NSColor(rgb: lightRGB)
-        let darkColor  = NSColor(rgb: darkRGB)
-
+        let darkColor = NSColor(rgb: darkRGB)
         return NSColor(name: nil) { appearance in
             switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
             case .darkAqua: return darkColor
@@ -148,7 +130,6 @@ private extension NSColor {
         }
     }
 
-    /// Initializes a color from a 24-bit RGB integer in sRGB color space.
     convenience init(rgb: Int) {
         let r = CGFloat((rgb >> 16) & 0xFF) / 255.0
         let g = CGFloat((rgb >> 8)  & 0xFF) / 255.0
