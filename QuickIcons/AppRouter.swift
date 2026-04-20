@@ -63,7 +63,7 @@ struct AppRouterView: View {
             case .checking:
                 CheckingView()
             case .available:
-                ContentView()
+                EditorView()
             case .unavailable(let reason):
                 ToolchainUnavailableView(reason: reason) {
                     router.checkToolchain()

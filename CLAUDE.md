@@ -10,7 +10,6 @@ QuickIcons/                        Main macOS app (SwiftUI, AppKit)
 ├── ExportableIcon.swift           Enum: icon names, directory names, view factory
 ├── IconExportService.swift        Renders SwiftUI views to AppIcon.appiconset bundles
 └── Views/
-    ├── ContentView.swift          Root view
     ├── IconExportView.swift       Legacy export UI (being superseded by EditorView)
     └── Icons/
         ├── KindleExporterIcon.swift
