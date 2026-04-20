@@ -84,8 +84,8 @@ struct EditorView: View {
                 )
                 .frame(
                     minWidth: 300,
-                    idealWidth: proxy.size.width / 3.2,
-                    maxWidth: max(proxy.size.width * 0.4, 300)
+                    idealWidth: proxy.size.width / 4,
+                    maxWidth: max(proxy.size.width * 0.35, 300)
                 )
             }
         }
