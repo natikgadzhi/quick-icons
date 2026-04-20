@@ -10,8 +10,6 @@ import SourceKittenFramework
 /// The service never throws to the caller — any internal SourceKit failure returns an empty array.
 nonisolated struct SourceKitDiagnosticsService: Sendable {
 
-    private static let cachedSDKPath: String? = Self.resolveSDKPath()
-
     init() {}
 
     /// Returns diagnostics for `source`. Writes `source` to a temporary file and queries
@@ -23,8 +21,13 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         guard let tmpURL = writeTempFile(source) else { return [] }
         defer { try? FileManager.default.removeItem(at: tmpURL) }
 
+        // Resolve the SDK path lazily on the first invocation via the shared
+        // actor-backed cache — the first `xcrun` spawn runs off-thread so it
+        // doesn't block MainActor on the first keystroke.
+        let sdkPath = await SDKPathCache.shared.path()
+
         let path = tmpURL.path
-        let compilerArgs = buildCompilerArgs(path: path, sdkPath: Self.cachedSDKPath)
+        let compilerArgs = buildCompilerArgs(path: path, sdkPath: sdkPath)
         let yaml = buildDiagnosticsYAMLRequest(path: path, compilerArgs: compilerArgs)
 
         do {
@@ -69,23 +72,6 @@ nonisolated struct SourceKitDiagnosticsService: Sendable {
         do {
             try source.write(to: url, atomically: true, encoding: .utf8)
             return url
-        } catch {
-            return nil
-        }
-    }
-
-    private static func resolveSDKPath() -> String? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        task.arguments = ["--show-sdk-path", "--sdk", "macosx"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             return nil
         }

@@ -197,16 +197,18 @@ public protocol CompletionRequestRunning: Sendable {
 /// `source.request.codecomplete` via SourceKittenFramework.
 public struct SourceKittenRunner: CompletionRequestRunning {
 
-    private static let cachedSDKPath: String? = Self.resolveSDKPath()
-
     public init() {}
 
     public func run(source: String, offset: Int) async throws -> [[String: Any]] {
         let tmpURL = try writeTempFile(source)
         defer { try? FileManager.default.removeItem(at: tmpURL) }
 
+        // Resolve the SDK path lazily via the shared actor-backed cache so
+        // the first completion request doesn't spawn `xcrun` on MainActor.
+        let sdkPath = await SDKPathCache.shared.path()
+
         let path = tmpURL.path
-        let args = buildCompilerArgs(path: path, sdkPath: Self.cachedSDKPath)
+        let args = buildCompilerArgs(path: path, sdkPath: sdkPath)
         let request = Request.codeCompletionRequest(
             file: path,
             contents: source,
@@ -229,24 +231,6 @@ public struct SourceKittenRunner: CompletionRequestRunning {
             .appendingPathComponent("SourceKitCompletion-\(UUID().uuidString).swift")
         try source.write(to: url, atomically: true, encoding: .utf8)
         return url
-    }
-
-    private static func resolveSDKPath() -> String? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        task.arguments = ["--show-sdk-path", "--sdk", "macosx"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            return nil
-        }
     }
 
     private func buildCompilerArgs(path: String, sdkPath: String?) -> [String] {
