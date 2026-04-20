@@ -1,6 +1,7 @@
 ---
 dependencies: [42-extract-editor-view-model]
-status: backlog
+status: in-progress
+pr: https://github.com/natikgadzhi/quick-icons/pull/63
 ---
 
 # Remove ContentView No-op Pass-through
