@@ -68,6 +68,17 @@ struct STTextViewRepresentable: NSViewRepresentable {
         textView.gutterView?.drawSeparator = true
         textView.gutterView?.areMarkersEnabled = true
 
+        // Widen the gutter so the diagnostic marker circle has room to sit to
+        // the trailing side of the line-number digit without overlapping it.
+        // STGutterLineNumberCell draws the digit right-aligned with
+        // `insets.trailing` as the right-edge padding, so bumping the trailing
+        // inset pushes the digits left and reserves empty space on the right
+        // where DiagnosticMarkerView.draw(_:) paints its circle.
+        if let gutterView = textView.gutterView {
+            gutterView.insets = STRulerInsets(leading: 4.0, trailing: 20.0)
+            gutterView.minimumThickness = max(gutterView.minimumThickness, 50)
+        }
+
         // Delegate for text-change callbacks
         textView.textDelegate = context.coordinator
 
@@ -433,9 +444,14 @@ struct STTextViewRepresentable: NSViewRepresentable {
     }
 }
 
-/// Gutter marker view drawn as a filled colored circle — red for errors,
-/// orange for warnings, gray for notes. Centered within the bounds the
-/// gutter allocates for the marker.
+/// Gutter marker for a diagnostic: a small filled circle in the trailing
+/// portion of the gutter, colored by severity (red/orange/grey).
+///
+/// STGutterView sizes the marker view itself in `layoutMarkers()` — it spans
+/// roughly the right 60% of the gutter and aligns vertically with the line
+/// number. We just draw a small circle on the trailing edge; the extra
+/// `insets.trailing` configured on STGutterView reserves empty space there
+/// so the circle does not collide with the line-number digit.
 private final class DiagnosticMarkerView: NSView {
     private let fillColor: NSColor
 
@@ -457,16 +473,19 @@ private final class DiagnosticMarkerView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        // Draw a circle that fits the shorter edge, centered in the allotted box.
-        let diameter = min(bounds.width, bounds.height) - 2
-        guard diameter > 0 else { return }
-        let rect = NSRect(
-            x: bounds.midX - diameter / 2,
+
+        // 10pt circle centered vertically on the line, nudged toward the
+        // trailing edge of our (STGutterView-sized) bounds into the empty
+        // zone created by the widened `insets.trailing`.
+        let diameter: CGFloat = 10
+        let trailingNudge: CGFloat = 5
+        let circleRect = NSRect(
+            x: bounds.maxX - diameter - trailingNudge,
             y: bounds.midY - diameter / 2,
             width: diameter,
             height: diameter
         )
         fillColor.setFill()
-        NSBezierPath(ovalIn: rect).fill()
+        NSBezierPath(ovalIn: circleRect).fill()
     }
 }
