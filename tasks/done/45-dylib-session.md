@@ -35,3 +35,7 @@ exposes a typed `makeView: (CGFloat) -> AnyView` factory.
 - Independent of task 42 — can land in either order. Coordinate with
   whichever worker is touching `EditorView` / `EditorViewModel`.
 - Size: S-M.
+
+
+## PR
+https://github.com/natikgadzhi/quick-icons/pull/57
