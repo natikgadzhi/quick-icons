@@ -104,7 +104,7 @@ struct STTextViewRepresentable: NSViewRepresentable {
         // Swift syntax highlighting via Plugin-Neon (tree-sitter).
         // Theme.xcode mirrors Xcode's stock "Default (Light / Dark)" palette and
         // resolves dynamically per appearance — no restart required.
-        textView.addPlugin(NeonPlugin(theme: .xcode, language: .swift))
+        textView.addPlugin(LocalNeonPlugin(theme: .xcode, language: .swift))
 
         // Gutter: use Xcode's line-number text color (dynamic, light/dark).
         // STGutterView.backgroundColor is internal, so background is left to the
