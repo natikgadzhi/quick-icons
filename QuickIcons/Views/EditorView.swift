@@ -37,32 +37,7 @@ struct EditorView: View {
         }
         .frame(minWidth: 1080, minHeight: 500)
         .onChange(of: model.sourceCode) { model.sourceCodeChanged() }
-        .focusedSceneValue(\.hasCompiledIcon, model.hasCompiledIcon)
-        .focusedSceneValue(\.showsInvisibles, model.showsInvisibles)
-        .onReceive(NotificationCenter.default.publisher(for: .openSwiftFileNotification)) { notification in
-            if let source = notification.userInfo?[OpenSwiftFileNotification.sourceKey] as? String {
-                model.sourceCode = source
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .buildRequested)) { _ in
-            Task { await model.compile() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .exportRequested)) { _ in
-            guard model.hasCompiledIcon else { return }
-            model.export()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleInvisibleCharacters)) { _ in
-            model.toggleInvisibles()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in
-            model.zoomIn()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in
-            model.zoomOut()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .resetZoom)) { _ in
-            model.resetZoom()
-        }
+        .focusedSceneValue(\.editorViewModel, model)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {

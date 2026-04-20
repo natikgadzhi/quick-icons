@@ -84,6 +84,23 @@ final class EditorViewModel {
     func resetZoom() { fontSize = 13 }
     func toggleInvisibles() { showsInvisibles.toggle() }
 
+    // MARK: - Open file
+
+    /// Loads Swift source from `url` into ``sourceCode``. Presents an NSAlert
+    /// describing any read error and leaves existing source untouched.
+    func openFile(at url: URL) {
+        do {
+            sourceCode = try readSwiftSource(at: url)
+        } catch {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Could Not Open File"
+            alert.informativeText = error.localizedDescription
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
+
     // MARK: - Compile
 
     /// Compiles the current ``sourceCode`` and, on success, renders the preview
