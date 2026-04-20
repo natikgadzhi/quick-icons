@@ -55,3 +55,7 @@ errors red, notes grey. No separate gutter column.
 
 - Breakpoint-style solid triangle markers.
 - Clicking the marker to reveal a popover — future task.
+
+## PR
+
+https://github.com/natikgadzhi/quick-icons/pull/43
