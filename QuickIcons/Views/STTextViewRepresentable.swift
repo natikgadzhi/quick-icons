@@ -141,6 +141,10 @@ struct STTextViewRepresentable: NSViewRepresentable {
             self.text = text
         }
 
+        deinit {
+            completionTask?.cancel()
+        }
+
         // MARK: - STTextViewDelegate
 
         /// Intercepts plain newline insertions so we can auto-indent to match
@@ -217,12 +221,10 @@ struct STTextViewRepresentable: NSViewRepresentable {
                 self.applyDiagnostics(diagnostics, to: textView)
             }
 
-            // Cancel any in-flight completion request and kick off STTextView's
-            // completion machinery. The delegate below awaits the owned task,
-            // which carries the 200ms debounce + sourcekitd round-trip. A new
-            // keystroke cancels the prior task; Coordinator teardown cancels it
-            // via ARC.
-            completionTask?.cancel()
+            // Kick off STTextView's completion machinery. The delegate below
+            // cancels and replaces the Coordinator-owned `completionTask`,
+            // which carries the 200ms debounce + sourcekitd round-trip.
+            // Coordinator teardown cancels any in-flight task via `deinit`.
             textView.complete(self)
         }
 
