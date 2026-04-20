@@ -368,7 +368,11 @@ struct STTextViewRepresentable: NSViewRepresentable {
             let worstByLine = Self.mostSevereByLine(diagnostics)
 
             for (line, severity) in worstByLine {
-                let markerView = DiagnosticMarkerView(severity: severity)
+                let markerView = DiagnosticMarkerView(
+                    severity: severity,
+                    lineNumber: line,
+                    font: gutter.font
+                )
                 gutter.addMarker(STGutterMarker(lineNumber: line, view: markerView))
                 diagnosticMarkerLines.insert(line)
             }
@@ -433,18 +437,31 @@ struct STTextViewRepresentable: NSViewRepresentable {
     }
 }
 
-/// Gutter marker view drawn as a filled colored circle — red for errors,
-/// orange for warnings, gray for notes. Centered within the bounds the
-/// gutter allocates for the marker.
+/// Gutter marker view drawn Xcode-style: a colored rounded-rectangle "capsule"
+/// hugging the line-number glyphs, with the line number rendered in white on
+/// top. Red for errors, orange for warnings, grey for notes.
+///
+/// STGutterView layers the marker container *behind* the line-number cells, so
+/// a naive draw would be obscured by the stock black/grey digits. After the
+/// marker is installed into the marker container, we re-parent ourselves up to
+/// the gutter view — making the capsule + white digits render on top of the
+/// stock line-number, fully replacing it for diagnosed lines.
 private final class DiagnosticMarkerView: NSView {
     private let fillColor: NSColor
+    private let lineNumber: Int
+    private let font: NSFont
 
-    init(severity: SwiftDiagnostic.Severity) {
+    init(severity: SwiftDiagnostic.Severity, lineNumber: Int, font: NSFont) {
         self.fillColor = switch severity {
         case .error: .systemRed
         case .warning: .systemOrange
         case .note: .systemGray
         }
+        self.lineNumber = lineNumber
+        // Match the gutter's monospaced-digit metric so our white number lines
+        // up 1:1 with the cell it hides. If the caller's font is not already
+        // monospaced-digit, fall back to one at the same point size.
+        self.font = font
         super.init(frame: .zero)
     }
 
@@ -455,18 +472,65 @@ private final class DiagnosticMarkerView: NSView {
 
     override var isFlipped: Bool { true }
 
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        // STGutterView adds STGutterMarkerContainerView first and the line-number
+        // container second, so anything we draw inside the marker container is
+        // behind the stock line-number digits. Hoist ourselves up to the gutter
+        // view itself so the capsule + white digit sit on top.
+        //
+        // STGutterView is public API; the marker container class is internal, so
+        // we detect "we're inside the marker container" indirectly by checking
+        // that our grandparent is the gutter. Once we're a direct subview of the
+        // gutter, the grandparent is the scroll-view machinery and the cast
+        // fails, which is how we avoid re-hoisting in an infinite loop.
+        guard let superview,
+              let gutter = superview.superview as? STGutterView,
+              superview !== gutter else {
+            return
+        }
+        let targetFrame = convert(bounds, to: gutter)
+        removeFromSuperview()
+        frame = targetFrame
+        gutter.addSubview(self) // appended last == frontmost
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        // Draw a circle that fits the shorter edge, centered in the allotted box.
-        let diameter = min(bounds.width, bounds.height) - 2
-        guard diameter > 0 else { return }
-        let rect = NSRect(
-            x: bounds.midX - diameter / 2,
-            y: bounds.midY - diameter / 2,
-            width: diameter,
-            height: diameter
+
+        let numberString = "\(lineNumber)"
+        let textAttributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.white,
+        ]
+        let textSize = (numberString as NSString).size(withAttributes: textAttributes)
+
+        // Right-align the number within our bounds, matching STGutterLineNumberCell's
+        // `insets.trailing` of 6pt so the white digit lands exactly on top of the
+        // stock digit that's drawn behind us.
+        let trailingInset: CGFloat = 6
+        let textX = bounds.maxX - textSize.width - trailingInset
+        let textY = bounds.midY - textSize.height / 2
+
+        // Capsule hugs the text with a small padding on each side. Radius == half
+        // the height gives a true capsule shape for short numbers and a rounded
+        // rectangle for multi-digit ones — matching Xcode's affordance.
+        let horizontalPadding: CGFloat = 4
+        let verticalPadding: CGFloat = 1
+        let capsuleRect = NSRect(
+            x: textX - horizontalPadding,
+            y: textY - verticalPadding,
+            width: textSize.width + horizontalPadding * 2,
+            height: textSize.height + verticalPadding * 2
         )
+        let radius = capsuleRect.height / 2
+
         fillColor.setFill()
-        NSBezierPath(ovalIn: rect).fill()
+        NSBezierPath(roundedRect: capsuleRect, xRadius: radius, yRadius: radius).fill()
+
+        (numberString as NSString).draw(
+            at: NSPoint(x: textX, y: textY),
+            withAttributes: textAttributes
+        )
     }
 }
