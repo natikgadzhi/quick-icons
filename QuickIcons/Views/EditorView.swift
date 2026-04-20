@@ -1,92 +1,32 @@
 import AppKit
 import SwiftUI
 
-private let defaultSourceCode = """
-import SwiftUI
-
-struct IconView: View {
-    var size: CGFloat
-
-    var body: some View {
-        ZStack {
-            Color.iconBackground
-
-            RadialGradient(
-                gradient: Gradient(colors: [Color.white.opacity(0.175), Color.iconBackground]),
-                center: .center,
-                startRadius: 0,
-                endRadius: size * 2)
-
-            Group {
-                Image(systemName: "bookmark.fill")
-                    .font(.system(size: size * 0.8))
-                    .fontWeight(.thin)
-                    .foregroundStyle(Color.bookmark)
-                    .overlay(
-                        LinearGradient(
-                            colors: [Color.red.opacity(0.05), Color.red.opacity(0.3)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                        .mask {
-                            Image(systemName: "bookmark.fill")
-                                .font(.system(size: size * 0.8))
-                                .fontWeight(.thin)
-                        }
-                    )
-
-                Image(systemName: "text.quote")
-                    .font(.system(size: size * 0.3))
-                    .foregroundStyle(.black.opacity(0.8))
-                    .offset(y: -size * 0.1)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: max(size * 0.025, 10), style: .circular))
-        .frame(width: size, height: size)
-    }
-}
-
-extension Color {
-    static let iconBackground = Color.black
-    static let bookmark = Color.yellow
-}
-"""
-
+/// Root editor scene: a split view with source on the left and preview on the
+/// right. All compile/export state lives on ``EditorViewModel``; this view is
+/// purely structural and forwards toolbar / menu actions into the model.
 struct EditorView: View {
-    @State private var sourceCode: String = defaultSourceCode
-    @State private var compiledImage: NSImage?
-    @State private var compileError: String?
-    @State private var isCompiling = false
-    @State private var compiledDylibURL: URL?
-    @State private var exportMessage: ExportMessage?
-    @State private var hasCompiledIcon = false
-    @State private var showsInvisibles = false
-    @State private var fontSize: CGFloat = 13
-
-    private let compiler = SwiftCompilerService()
-    private let dylibSession: DylibSession
-    private let previewer: IconPreviewService
-    private let exporter = IconExportService()
-
-    init() {
-        let session = DylibSession()
-        self.dylibSession = session
-        self.previewer = IconPreviewService(session: session)
-    }
+    @State private var model = EditorViewModel()
 
     var body: some View {
+        @Bindable var model = model
+
         GeometryReader { proxy in
             HSplitView {
-                EditorPanel(sourceCode: $sourceCode, showsInvisibles: showsInvisibles, fontSize: fontSize)
-                    .frame(
-                        minWidth: 420,
-                        idealWidth: proxy.size.width * 2 / 3,
-                        maxWidth: .infinity
-                    )
+                EditorPanel(
+                    sourceCode: $model.sourceCode,
+                    showsInvisibles: model.showsInvisibles,
+                    fontSize: model.fontSize
+                )
+                .frame(
+                    minWidth: 420,
+                    idealWidth: proxy.size.width * 2 / 3,
+                    maxWidth: .infinity
+                )
                 PreviewPanel(
-                    image: compiledImage,
-                    errorMessage: compileError,
-                    isCompiling: isCompiling,
-                    exportMessage: $exportMessage
+                    image: model.compiledImage,
+                    errorMessage: model.compileError,
+                    isCompiling: model.isCompiling,
+                    exportMessage: $model.exportMessage
                 )
                 .frame(
                     minWidth: 300,
@@ -96,122 +36,56 @@ struct EditorView: View {
             }
         }
         .frame(minWidth: 1080, minHeight: 500)
-        .onChange(of: sourceCode) { hasCompiledIcon = false }
-        .focusedSceneValue(\.hasCompiledIcon, hasCompiledIcon)
-        .focusedSceneValue(\.showsInvisibles, showsInvisibles)
+        .onChange(of: model.sourceCode) { model.sourceCodeChanged() }
+        .focusedSceneValue(\.hasCompiledIcon, model.hasCompiledIcon)
+        .focusedSceneValue(\.showsInvisibles, model.showsInvisibles)
         .onReceive(NotificationCenter.default.publisher(for: .openSwiftFileNotification)) { notification in
             if let source = notification.userInfo?[OpenSwiftFileNotification.sourceKey] as? String {
-                sourceCode = source
+                model.sourceCode = source
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .buildRequested)) { _ in
-            Task { await compile() }
+            Task { await model.compile() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .exportRequested)) { _ in
-            guard hasCompiledIcon else { return }
-            export()
+            guard model.hasCompiledIcon else { return }
+            model.export()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleInvisibleCharacters)) { _ in
-            showsInvisibles.toggle()
+            model.toggleInvisibles()
         }
         .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in
-            fontSize = min(fontSize + 1, 36)
+            model.zoomIn()
         }
         .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in
-            fontSize = max(fontSize - 1, 9)
+            model.zoomOut()
         }
         .onReceive(NotificationCenter.default.publisher(for: .resetZoom)) { _ in
-            fontSize = 13
+            model.resetZoom()
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    Task { await compile() }
+                    Task { await model.compile() }
                 } label: {
                     Label(
-                        isCompiling ? "Building…" : "Build",
-                        systemImage: isCompiling ? "hammer" : "hammer.fill"
+                        model.isCompiling ? "Building…" : "Build",
+                        systemImage: model.isCompiling ? "hammer" : "hammer.fill"
                     )
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isCompiling)
+                .disabled(model.isCompiling)
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    export()
+                    model.export()
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
-                .disabled(!hasCompiledIcon)
+                .disabled(!model.hasCompiledIcon)
             }
         }
     }
-
-    private func compile() async {
-        isCompiling = true
-        compileError = nil
-        exportMessage = nil
-
-        let result = await compiler.compile(source: sourceCode)
-
-        switch result {
-        case .success(let dylibURL):
-            compiledDylibURL = dylibURL
-            compiledImage = previewer.render(dylibURL: dylibURL, size: 400)
-            hasCompiledIcon = true
-        case .failure(let diagnostics):
-            compiledDylibURL = nil
-            compiledImage = nil
-            hasCompiledIcon = false
-            if let first = diagnostics.first(where: { $0.severity == .error }) ?? diagnostics.first {
-                compileError = "Error on line \(first.line): \(first.message)"
-            } else {
-                compileError = "Compilation failed with unknown error."
-            }
-        }
-
-        isCompiling = false
-    }
-
-    private func export() {
-        guard let dylibURL = compiledDylibURL else {
-            exportMessage = .error("Compile the icon first before exporting.")
-            return
-        }
-
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.prompt = "Export Here"
-        panel.message = "Choose the directory to export the AppIcon.appiconset bundle into."
-
-        guard panel.runModal() == .OK, let baseURL = panel.url else { return }
-
-        let factory: IconFactory
-        do {
-            factory = try dylibSession.loadIcon(at: dylibURL)
-        } catch {
-            exportMessage = .error("Could not load the compiled icon. Try building again.")
-            return
-        }
-
-        do {
-            let destination = try exporter.export(
-                viewFactory: { factory.view(size: $0) },
-                name: "AppIcon",
-                to: baseURL
-            )
-            exportMessage = .success(destination.path)
-        } catch {
-            exportMessage = .error(error.localizedDescription)
-        }
-    }
-}
-
-enum ExportMessage: Equatable {
-    case success(String)
-    case error(String)
 }
 
 #Preview {
