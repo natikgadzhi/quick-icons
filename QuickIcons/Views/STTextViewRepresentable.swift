@@ -3,6 +3,7 @@ import SwiftUI
 import STTextView
 import STPluginNeon
 import STAnnotationsPlugin
+import STTextKitPlus
 import TreeSitterResource
 
 /// NSViewRepresentable wrapper around STTextView.
@@ -309,6 +310,102 @@ struct STTextViewRepresentable: NSViewRepresentable {
             }
             completionTask = task
             return await task.value
+        }
+
+        /// Inserts the selected completion into the text view, replacing the
+        /// identifier prefix the user already typed at the caret with the item's
+        /// `plainInsertText`. Placeholder markers (`<#…#>`) are stripped to
+        /// their visible labels; the first placeholder is selected so the user
+        /// can type over it immediately (Xcode-style "argument tab stop"
+        /// behavior, minus the rich snippet UI which STTextView does not yet
+        /// support).
+        func textView(_ textView: STTextView, insertCompletionItem item: any STCompletionItem) {
+            guard let completion = item as? SwiftCompletionListItem else { return }
+            let insertText = completion.plainInsertText
+            guard !insertText.isEmpty else { return }
+
+            let source = textView.text ?? ""
+            let caretLocation = textView.textLayoutManager.insertionPointLocations.first
+                ?? textView.textLayoutManager.documentRange.location
+            let caretUTF16 = textView.textLayoutManager.offset(
+                from: textView.textLayoutManager.documentRange.location,
+                to: caretLocation
+            )
+            let prefixLength = Self.identifierPrefixLength(
+                in: source,
+                endingAtUTF16Offset: caretUTF16
+            )
+
+            // Replace [caret - prefix, caret) with the plain insert text.
+            let replacementStartUTF16 = caretUTF16 - prefixLength
+            guard replacementStartUTF16 >= 0,
+                  let replacementStart = textView.textLayoutManager.location(
+                    textView.textLayoutManager.documentRange.location,
+                    offsetBy: replacementStartUTF16
+                  ),
+                  let replacementRange = NSTextRange(
+                    location: replacementStart,
+                    end: caretLocation
+                  ) else {
+                // Fallback: just insert at the current selection.
+                textView.insertText(insertText, replacementRange: textView.selectedRange())
+                return
+            }
+
+            textView.replaceCharacters(in: replacementRange, with: insertText)
+
+            // If the insert contains a placeholder, select its label so the
+            // user can type over it. Otherwise, leave the caret at the end.
+            if let placeholderRange = completion.firstPlaceholderUTF16Range,
+               let selectionStart = textView.textLayoutManager.location(
+                replacementStart,
+                offsetBy: placeholderRange.lowerBound
+               ),
+               let selectionEnd = textView.textLayoutManager.location(
+                replacementStart,
+                offsetBy: placeholderRange.upperBound
+               ),
+               let selectionRange = NSTextRange(location: selectionStart, end: selectionEnd) {
+                textView.textLayoutManager.textSelections = [
+                    NSTextSelection(
+                        range: selectionRange,
+                        affinity: .downstream,
+                        granularity: .character
+                    )
+                ]
+            }
+        }
+
+        /// Returns the length (in UTF-16 code units) of the identifier prefix
+        /// ending at `endingAtUTF16Offset` inside `source`. Used to decide how
+        /// much of the user's partial word to replace on completion insertion.
+        /// An identifier character is `[A-Za-z0-9_]`; this mirrors what the
+        /// SourceKit completion request considers a prefix.
+        static func identifierPrefixLength(in source: String, endingAtUTF16Offset offset: Int) -> Int {
+            guard offset > 0 else { return 0 }
+            let utf16 = source.utf16
+            guard let endIndex = utf16.index(
+                utf16.startIndex,
+                offsetBy: offset,
+                limitedBy: utf16.endIndex
+            ) else {
+                return 0
+            }
+            var count = 0
+            var cursor = endIndex
+            while cursor > utf16.startIndex {
+                let prev = utf16.index(before: cursor)
+                let unit = utf16[prev]
+                // Fast path: only ASCII identifier characters count as prefix.
+                let isIdent = (unit >= 0x30 && unit <= 0x39)          // 0-9
+                    || (unit >= 0x41 && unit <= 0x5A)                 // A-Z
+                    || (unit >= 0x61 && unit <= 0x7A)                 // a-z
+                    || unit == 0x5F                                   // _
+                if !isIdent { break }
+                count += 1
+                cursor = prev
+            }
+            return count
         }
 
         /// Converts a UTF-16 code-unit offset (what `NSTextLayoutManager.offset`

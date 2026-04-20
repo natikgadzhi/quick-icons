@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import QuickIcons
@@ -165,5 +166,83 @@ struct SourceKitCompletionServiceTests {
         for kind in CompletionKind.allCases {
             #expect(!kind.sfSymbolName.isEmpty)
         }
+    }
+
+    /// Every kind resolves to an SF Symbol that exists on the current system.
+    /// If a mapping drifts to a symbol the OS doesn't ship, `NSImage(systemSymbolName:)`
+    /// returns nil and the row view would render blank — this test pins that down.
+    @Test func sfSymbolNamesResolveOnSystem() {
+        for kind in CompletionKind.allCases {
+            let image = NSImage(systemSymbolName: kind.sfSymbolName, accessibilityDescription: nil)
+            #expect(image != nil, "missing SF Symbol for \(kind): \(kind.sfSymbolName)")
+        }
+    }
+
+    /// Literal results (integer/string/boolean literals surfaced by SourceKit)
+    /// bucket into `.literal` and pick the numeric SF Symbol.
+    @Test func literalKindsMapToLiteral() {
+        #expect(CompletionKind.from(sourceKitKind: "source.lang.swift.literal.integer") == .literal)
+        #expect(CompletionKind.from(sourceKitKind: "source.lang.swift.literal.string") == .literal)
+        #expect(CompletionKind.from(sourceKitKind: "source.lang.swift.literal.boolean") == .literal)
+        #expect(CompletionKind.literal.sfSymbolName == "number.square")
+    }
+
+    // MARK: - Placeholder parsing
+
+    /// Simple `<#name#>` placeholders: the visible label is retained and the
+    /// first placeholder's UTF-16 range points at it inside the stripped text.
+    @Test func stripsSimplePlaceholders() {
+        let item = SwiftCompletionItem(
+            name: "foo",
+            description: "foo(bar:)",
+            sourcetext: "foo(<#bar#>)",
+            kind: .function,
+            typeName: nil
+        )
+        #expect(item.plainInsertText == "foo(bar)")
+        #expect(item.firstPlaceholderUTF16Range == 4..<7)
+    }
+
+    /// Typed `<#T##label##Type#>` placeholders: only the middle `label`
+    /// component is surfaced.
+    @Test func stripsTypedPlaceholders() {
+        let item = SwiftCompletionItem(
+            name: "print(_:separator:terminator:)",
+            description: "print(items: Any..., separator: String, terminator: String)",
+            sourcetext: "print(<#T##items: Any...##Any#>)",
+            kind: .function,
+            typeName: "Void"
+        )
+        #expect(item.plainInsertText == "print(items: Any...)")
+        // `items: Any...` is 13 UTF-16 units starting at offset 6 (after "print(").
+        #expect(item.firstPlaceholderUTF16Range == 6..<19)
+    }
+
+    /// Plain sourcetext with no placeholders is returned verbatim and yields
+    /// no placeholder range.
+    @Test func plainSourceTextPassesThrough() {
+        let item = SwiftCompletionItem(
+            name: "return",
+            description: "return",
+            sourcetext: "return",
+            kind: .keyword,
+            typeName: nil
+        )
+        #expect(item.plainInsertText == "return")
+        #expect(item.firstPlaceholderUTF16Range == nil)
+    }
+
+    /// Multiple placeholders: only the first placeholder's range is returned,
+    /// but every placeholder is stripped to its visible label in the output.
+    @Test func firstPlaceholderRangePointsAtFirstLabel() {
+        let item = SwiftCompletionItem(
+            name: "pair",
+            description: "pair(a:b:)",
+            sourcetext: "pair(<#T##a##Int#>, <#T##b##Int#>)",
+            kind: .function,
+            typeName: "Void"
+        )
+        #expect(item.plainInsertText == "pair(a, b)")
+        #expect(item.firstPlaceholderUTF16Range == 5..<6)
     }
 }
