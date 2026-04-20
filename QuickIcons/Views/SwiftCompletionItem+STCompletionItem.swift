@@ -1,5 +1,4 @@
 import AppKit
-import STPluginNeon
 import STTextView
 
 /// Adapter that makes `SwiftCompletionItem` (a value type produced by
@@ -48,16 +47,6 @@ struct SwiftCompletionListItem: STCompletionItem {
         let label = NSTextField(labelWithString: item.description)
         label.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         label.lineBreakMode = .byTruncatingTail
-        // When SourceKit emits an annotated description, render each run in
-        // its Theme.xcode color. The palette's NSColors are appearance-aware
-        // (`NSColor(name:dynamicProvider:)`), so AppKit re-resolves them on
-        // light/dark flips with no rebuild.
-        if let runs = item.annotatedDescription {
-            label.attributedStringValue = Self.attributedString(
-                runs: runs,
-                font: label.font ?? NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-            )
-        }
 
         row.addArrangedSubview(iconView)
         row.addArrangedSubview(label)
@@ -78,29 +67,5 @@ struct SwiftCompletionListItem: STCompletionItem {
             row.addArrangedSubview(typeLabel)
         }
         return row
-    }
-
-    /// Builds the attributed label for the completion row from parsed
-    /// `AnnotatedRun`s. Each run's foreground color is pulled from
-    /// `Theme.xcode`, which stores dynamic colors that resolve per appearance
-    /// — so a single `NSAttributedString` renders correctly in both light
-    /// and dark mode without rebuilding the string on appearance changes.
-    static func attributedString(runs: [AnnotatedRun], font: NSFont) -> NSAttributedString {
-        let result = NSMutableAttributedString()
-        let theme = Theme.xcode
-        for run in runs {
-            // Look up the color for this run's kind. The raw value of
-            // `AnnotationKind` is the theme token name; falling back to
-            // `plain` (and finally `labelColor`) keeps text readable even if
-            // the theme and the annotation vocabulary drift apart.
-            let color = theme.color(forToken: TokenName(run.kind.rawValue))
-                ?? NSColor.labelColor
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: color
-            ]
-            result.append(NSAttributedString(string: run.text, attributes: attrs))
-        }
-        return result
     }
 }
