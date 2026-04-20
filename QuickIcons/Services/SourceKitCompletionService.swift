@@ -15,6 +15,27 @@ public struct SwiftCompletionItem: Sendable, Equatable {
     public let kind: CompletionKind
     public let typeName: String?
 
+    /// The SourceKit `sourcetext` stripped of `<#...#>` placeholder markers —
+    /// suitable for plain-text insertion into an editor that does not support
+    /// snippet placeholders.
+    ///
+    /// SourceKit emits two placeholder shapes:
+    ///   * Typed:  `<#T##label##Type#>` — we surface `label`.
+    ///   * Simple: `<#label#>`          — we surface `label`.
+    ///
+    /// Everything outside the markers is passed through verbatim so operators,
+    /// parentheses, commas, etc. remain intact.
+    ///
+    /// Computed once at init from `sourcetext` and cached so repeated reads
+    /// (popup display + insertion) don't re-parse the template.
+    public let plainInsertText: String
+
+    /// UTF-16 range of the first placeholder inside `plainInsertText`, or
+    /// `nil` when the sourcetext contains no placeholders. Callers use this to
+    /// position the caret / selection so the user can immediately type over
+    /// the first argument.
+    public let firstPlaceholderUTF16Range: Range<Int>?
+
     public init(
         name: String,
         description: String,
@@ -27,28 +48,9 @@ public struct SwiftCompletionItem: Sendable, Equatable {
         self.sourcetext = sourcetext
         self.kind = kind
         self.typeName = typeName
-    }
-
-    /// The SourceKit `sourcetext` stripped of `<#...#>` placeholder markers —
-    /// suitable for plain-text insertion into an editor that does not support
-    /// snippet placeholders.
-    ///
-    /// SourceKit emits two placeholder shapes:
-    ///   * Typed:  `<#T##label##Type#>` — we surface `label`.
-    ///   * Simple: `<#label#>`          — we surface `label`.
-    ///
-    /// Everything outside the markers is passed through verbatim so operators,
-    /// parentheses, commas, etc. remain intact.
-    public var plainInsertText: String {
-        Self.strippedSourceText(sourcetext).text
-    }
-
-    /// UTF-16 range of the first placeholder inside `plainInsertText`, or
-    /// `nil` when the sourcetext contains no placeholders. Callers use this to
-    /// position the caret / selection so the user can immediately type over
-    /// the first argument.
-    public var firstPlaceholderUTF16Range: Range<Int>? {
-        Self.strippedSourceText(sourcetext).firstPlaceholder
+        let stripped = Self.strippedSourceText(sourcetext)
+        self.plainInsertText = stripped.text
+        self.firstPlaceholderUTF16Range = stripped.firstPlaceholder
     }
 
     /// Parses `sourcetext`, returning the plain visible text and the UTF-16

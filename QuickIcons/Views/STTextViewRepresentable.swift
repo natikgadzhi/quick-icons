@@ -326,6 +326,7 @@ struct STTextViewRepresentable: NSViewRepresentable {
 
             let source = textView.text ?? ""
             let caretLocation = textView.textLayoutManager.insertionPointLocations.first
+                ?? textView.textLayoutManager.textSelections.first?.textRanges.first?.endLocation
                 ?? textView.textLayoutManager.documentRange.location
             let caretUTF16 = textView.textLayoutManager.offset(
                 from: textView.textLayoutManager.documentRange.location,
