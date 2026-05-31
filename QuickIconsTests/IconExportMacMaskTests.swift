@@ -78,6 +78,32 @@ struct IconExportMacMaskTests {
         AnyView(Color(white: 0.5).frame(width: size, height: size))
     }
 
+    // MARK: - Rim tint probing
+
+    @Test func borderTintPicksUpDominantHue() {
+        let red = MacIconRimTint.averageBorderColor(for: { size in
+            AnyView(Color.red.frame(width: size, height: size))
+        })
+        let redColor = try? #require(red)
+        #expect((redColor?.r ?? 0) > (redColor?.g ?? 1), "red artwork → red-dominant border tint")
+        #expect((redColor?.r ?? 0) > (redColor?.b ?? 1))
+
+        let blue = MacIconRimTint.averageBorderColor(for: { size in
+            AnyView(Color.blue.frame(width: size, height: size))
+        })
+        let blueColor = try? #require(blue)
+        #expect((blueColor?.b ?? 0) > (blueColor?.r ?? 1), "blue artwork → blue-dominant border tint")
+    }
+
+    @Test func borderTintIsNilWhenEdgesAreTransparent() {
+        // A small circle centered on a transparent canvas leaves the border ring empty.
+        let tint = MacIconRimTint.averageBorderColor(for: { size in
+            AnyView(Circle().fill(Color.red).frame(width: size * 0.4, height: size * 0.4)
+                .frame(width: size, height: size))
+        })
+        #expect(tint == nil, "transparent border → no tint (falls back to white)")
+    }
+
     @Test func macIconHasGlossyBeveledRimLighting() throws {
         let base = try makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: base) }

@@ -37,8 +37,11 @@ struct IconExportService {
         }
         try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
 
+        // Probe the artwork's edge colors once; mac variants tint their gloss with it.
+        let macHighlight = MacIconRimTint.highlight(for: viewFactory)
+
         for variant in AppIconVariant.all {
-            let view = renderView(for: variant, viewFactory: viewFactory)
+            let view = renderView(for: variant, viewFactory: viewFactory, macHighlight: macHighlight)
             guard let image = render(view, pixelSize: variant.pixelSize) else {
                 throw IconExportError.renderingFailed(size: variant.pixelSize)
             }
@@ -59,12 +62,15 @@ struct IconExportService {
     /// with a transparent margin baked in; iOS/iPad icons stay full-bleed (the OS masks them).
     private func renderView(
         for variant: AppIconVariant,
-        viewFactory: @escaping (CGFloat) -> AnyView
+        viewFactory: @escaping (CGFloat) -> AnyView,
+        macHighlight: Color
     ) -> AnyView {
         guard variant.idiom == "mac" else {
             return viewFactory(variant.pixelSize)
         }
-        return AnyView(MacIconFrame(canvasSize: variant.pixelSize) { viewFactory($0) })
+        return AnyView(
+            MacIconFrame(canvasSize: variant.pixelSize, highlightColor: macHighlight) { viewFactory($0) }
+        )
     }
 
     private func render<V: View>(_ view: V, pixelSize: CGFloat) -> CGImage? {

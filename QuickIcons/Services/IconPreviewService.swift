@@ -35,7 +35,9 @@ final class IconPreviewService {
         case .original:
             content = factory.view(size: size)
         case .macOS:
-            content = AnyView(MacIconFrame(canvasSize: size) { factory.view(size: $0) })
+            let artwork: (CGFloat) -> AnyView = { factory.view(size: $0) }
+            let highlight = MacIconRimTint.highlight(for: artwork)
+            content = AnyView(MacIconFrame(canvasSize: size, highlightColor: highlight, content: artwork))
         }
         let renderer = ImageRenderer(content: content)
         renderer.scale = 2

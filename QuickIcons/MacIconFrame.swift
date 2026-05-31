@@ -28,6 +28,9 @@ enum MacIconGeometry {
 struct MacIconFrame<Content: View>: View {
     /// The full canvas size, in points. The artwork is inset within this.
     let canvasSize: CGFloat
+    /// The gloss highlight color — mostly white, tinted a smidge toward the icon's edge
+    /// colors. Defaults to neutral white. See ``MacIconRimTint``.
+    var highlightColor: Color = .white
     /// Builds the artwork at the body size passed in.
     @ViewBuilder var content: (CGFloat) -> Content
 
@@ -54,23 +57,23 @@ struct MacIconFrame<Content: View>: View {
             // 1. Glass sheen over the upper surface — reads as a reflection.
             shape.fill(
                 LinearGradient(
-                    colors: [.white.opacity(0.30), .white.opacity(0.0)],
+                    colors: [highlightColor.opacity(0.30), highlightColor.opacity(0.0)],
                     startPoint: .top,
                     endPoint: UnitPoint(x: 0.5, y: 0.45)
                 )
             )
 
             // 2. Even rim around the whole edge so every side catches light.
-            shape.strokeBorder(.white.opacity(0.30), lineWidth: bodySize * 0.012)
+            shape.strokeBorder(highlightColor.opacity(0.30), lineWidth: bodySize * 0.010)
 
             // 3. Crisp bright specular right at the top edge.
             shape.strokeBorder(
                 LinearGradient(
-                    colors: [.white, .white.opacity(0.0)],
+                    colors: [highlightColor, highlightColor.opacity(0.0)],
                     startPoint: .top,
                     endPoint: UnitPoint(x: 0.5, y: 0.14)
                 ),
-                lineWidth: bodySize * 0.010
+                lineWidth: bodySize * 0.008
             )
 
             // 4. Bottom inner shadow for the beveled, glassy depth.
@@ -80,7 +83,7 @@ struct MacIconFrame<Content: View>: View {
                     startPoint: .center,
                     endPoint: .bottom
                 ),
-                lineWidth: bodySize * 0.018
+                lineWidth: bodySize * 0.015
             )
         }
     }
