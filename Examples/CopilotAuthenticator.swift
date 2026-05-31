@@ -3,7 +3,11 @@
 //  QuickIcons — example icon
 //
 //  Open this file in QuickIcons to render and export it. The app renders the
-//  top-level `IconView`; `FilmGrain`/`SeededRNG` are grain-texture helpers.
+//  top-level `IconView`; `ShackleShape` and `KeyStemShape` are helpers it uses.
+//
+//  Concept: a large cool-steel padlock glowing like a spotlight against a deep
+//  blue-black ground — authentication, lit and front-and-center. Same character
+//  as the QuickIcons and Amazon icons: a single hero, cast against cool dark.
 //
 
 import SwiftUI
@@ -11,92 +15,68 @@ import SwiftUI
 // MARK: - Palette
 
 private extension Color {
-    // Navy radial ground
-    static let copilotBgCore = Color(red: 0.204, green: 0.251, blue: 0.416)
-    static let copilotBgMid  = Color(red: 0.102, green: 0.137, blue: 0.259)
-    static let copilotBgEdge = Color(red: 0.039, green: 0.055, blue: 0.118)
+    // Deep blue-black ground (shared character with the other icons)
+    static let lkGroundCore = Color(red: 0.06, green: 0.08, blue: 0.16)
+    static let lkGroundEdge = Color(red: 0.012, green: 0.018, blue: 0.045)
 
-    // Shield rim — light source hitting the top edge
-    static let copilotRimHi   = Color(red: 0.957, green: 0.969, blue: 1.0)
-    static let copilotRimMid  = Color(red: 0.604, green: 0.651, blue: 0.847)
-    static let copilotRimLow  = Color(red: 0.224, green: 0.259, blue: 0.416)
+    // Cool spotlight haze + halo cast by the steel lock
+    static let lkGlowCool = Color(red: 0.42, green: 0.56, blue: 0.95)
+    static let lkHalo = Color(red: 0.40, green: 0.62, blue: 1.0)
 
-    // Cool off-white arrow, matched to the rim highlight
-    static let copilotArrow = Color(red: 0.949, green: 0.961, blue: 1.0)
+    // Lock body — cool steel/blue
+    static let lkBodyTop = Color(red: 0.80, green: 0.87, blue: 0.97)
+    static let lkBodyMid = Color(red: 0.44, green: 0.58, blue: 0.84)
+    static let lkBodyBot = Color(red: 0.20, green: 0.30, blue: 0.60)
+
+    // Shackle — brighter brushed steel
+    static let lkShackleHi = Color(red: 0.92, green: 0.95, blue: 1.0)
+    static let lkShackleMid = Color(red: 0.58, green: 0.66, blue: 0.80)
+    static let lkShackleLow = Color(red: 0.28, green: 0.35, blue: 0.50)
+
+    // Keyhole ink
+    static let lkKeyhole = Color(red: 0.09, green: 0.13, blue: 0.28)
+
+    // Specular rim
+    static let lkRimHi = Color(red: 1.0, green: 1.0, blue: 1.0)
+    static let lkRimLow = Color(red: 0.20, green: 0.28, blue: 0.50)
 }
 
-// MARK: - Shield shape
+// MARK: - Shackle shape
 
-/// Rounded heraldic shield, drawn in fractions of the bounding rect.
-struct ShieldShape: Shape {
+/// Centerline of a padlock shackle (an "n" — two legs joined by a semicircle).
+/// Stroke it with a round line cap to get the metal loop.
+struct ShackleShape: Shape {
     func path(in rect: CGRect) -> Path {
-        func pt(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint {
-            CGPoint(x: rect.minX + fx * rect.width, y: rect.minY + fy * rect.height)
-        }
         var p = Path()
-        p.move(to: pt(0.50, 0.15))
-        p.addLine(to: pt(0.79, 0.26))
-        p.addLine(to: pt(0.79, 0.52))
-        p.addCurve(to: pt(0.50, 0.88), control1: pt(0.79, 0.71), control2: pt(0.655, 0.815))
-        p.addCurve(to: pt(0.21, 0.52), control1: pt(0.345, 0.815), control2: pt(0.21, 0.71))
-        p.addLine(to: pt(0.21, 0.26))
-        p.closeSubpath()
+        let r = rect.width / 2
+        let archCenterY = rect.minY + r
+        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: archCenterY))
+        p.addArc(
+            center: CGPoint(x: rect.midX, y: archCenterY),
+            radius: r,
+            startAngle: .degrees(180),
+            endAngle: .degrees(0),
+            clockwise: false
+        )
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         return p
     }
 }
 
-// MARK: - Arrow shape
+// MARK: - Keyhole stem
 
-/// Copilot "send" arrow, traced from the favicon silhouette: a broad dart with a
-/// wide left wing, tip at the upper-right, and a subtle concave notch on the lower-left.
-/// Coordinates are normalized to the shape's bounding box.
-struct CopilotArrowShape: Shape {
+/// Trapezoid (wider at the bottom) that sits under the keyhole circle.
+struct KeyStemShape: Shape {
     func path(in rect: CGRect) -> Path {
-        func pt(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint {
-            CGPoint(x: rect.minX + fx * rect.width, y: rect.minY + fy * rect.height)
-        }
         var p = Path()
-        p.move(to: pt(1.0, 0.0))      // tip (upper-right)
-        p.addLine(to: pt(0.0, 0.392)) // back-left wing
-        p.addLine(to: pt(0.389, 0.595)) // notch
-        p.addLine(to: pt(0.625, 1.0)) // keel (bottom)
+        let topInset = rect.width * 0.30
+        p.move(to: CGPoint(x: rect.minX + topInset, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - topInset, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
         p.closeSubpath()
         return p
-    }
-}
-
-// MARK: - Film grain
-
-struct FilmGrain: View {
-    var intensity: Double = 0.1
-    var density: Int = 10000
-
-    var body: some View {
-        Canvas { ctx, size in
-            var rng = SeededRNG(seed: 42)
-            for _ in 0..<density {
-                let x = Double(rng.next()) * size.width
-                let y = Double(rng.next()) * size.height
-                let brightness = Double(rng.next())
-                let alpha = (brightness - 0.5) * intensity * 2
-                let color: Color = alpha > 0
-                    ? .white.opacity(alpha)
-                    : .black.opacity(-alpha)
-                let rect = CGRect(x: x, y: y, width: 1.2, height: 1.2)
-                ctx.fill(Path(ellipseIn: rect), with: .color(color))
-            }
-        }
-        .blendMode(.overlay)
-        .allowsHitTesting(false)
-    }
-}
-
-struct SeededRNG {
-    var state: UInt64
-    init(seed: UInt64) { self.state = seed }
-    mutating func next() -> Float {
-        state = state &* 6364136223846793005 &+ 1442695040888963407
-        return Float(state >> 33) / Float(UInt32.max)
     }
 }
 
@@ -105,52 +85,149 @@ struct SeededRNG {
 struct IconView: View {
     var size: CGFloat
 
-    // Arrow box: favicon aspect ratio 36:37, sized to sit comfortably in the shield.
-    private var arrowWidth: CGFloat { size * 0.42 }
-    private var arrowHeight: CGFloat { arrowWidth * 37.0 / 36.0 }
+    // Lock geometry
+    private var bodyW: CGFloat { size * 0.46 }
+    private var bodyH: CGFloat { size * 0.38 }
+    private var bodyRadius: CGFloat { bodyW * 0.24 }
+    private var shackleSpan: CGFloat { size * 0.24 }
+    private var shackleThickness: CGFloat { size * 0.062 }
 
     var body: some View {
         ZStack {
+            // Ground: deep blue-black, brighter toward the lit center
             RadialGradient(
-                gradient: Gradient(colors: [.copilotBgCore, .copilotBgMid, .copilotBgEdge]),
-                center: UnitPoint(x: 0.5, y: 0.4),
+                gradient: Gradient(colors: [.lkGroundCore, .lkGroundEdge]),
+                center: UnitPoint(x: 0.5, y: 0.46),
                 startRadius: 0,
-                endRadius: size * 0.62
+                endRadius: size * 0.85
             )
 
-            // Shield: faint inner fill + top-rim specular stroke
-            ShieldShape()
-                .fill(
-                    LinearGradient(
-                        colors: [.white.opacity(0.12), .white.opacity(0.02)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+            // Cool spotlight haze
+            RadialGradient(
+                gradient: Gradient(colors: [Color.lkGlowCool.opacity(0.22), .clear]),
+                center: UnitPoint(x: 0.5, y: 0.46),
+                startRadius: 0,
+                endRadius: size * 0.6
+            )
+            .blendMode(.screen)
 
-            ShieldShape()
-                .stroke(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .copilotRimHi, location: 0.0),
-                            .init(color: .copilotRimMid, location: 0.35),
-                            .init(color: .copilotRimLow, location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: size * 0.0225
-                )
+            // Cool halo cast by the lock
+            RadialGradient(
+                gradient: Gradient(colors: [Color.lkHalo.opacity(0.45), .clear]),
+                center: UnitPoint(x: 0.5, y: 0.5),
+                startRadius: 0,
+                endRadius: size * 0.42
+            )
+            .blendMode(.screen)
 
-            // Arrow, centered on the shield's visual centroid
-            CopilotArrowShape()
-                .fill(Color.copilotArrow)
-                .frame(width: arrowWidth, height: arrowHeight)
-                .offset(x: -size * 0.03, y: -size * 0.01)
-
-            FilmGrain(intensity: 0.07, density: Int(size * 6))
+            lock
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: max(size * 0.025, 10), style: .circular))
+    }
+
+    // MARK: Lock
+
+    private var lock: some View {
+        ZStack {
+            shackle
+                .offset(y: -size * 0.135)
+
+            lockBody
+                .offset(y: size * 0.085)
+        }
+        .shadow(color: .black.opacity(0.45), radius: size * 0.045, y: size * 0.022)
+        .shadow(color: Color.lkHalo.opacity(0.40), radius: size * 0.07)
+    }
+
+    private var shackle: some View {
+        ShackleShape()
+            .stroke(
+                LinearGradient(
+                    colors: [.lkShackleHi, .lkShackleMid, .lkShackleLow],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                style: StrokeStyle(lineWidth: shackleThickness, lineCap: .round, lineJoin: .round)
+            )
+            .overlay(
+                ShackleShape()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.9), .clear],
+                            startPoint: .top,
+                            endPoint: .center
+                        ),
+                        style: StrokeStyle(lineWidth: shackleThickness * 0.22, lineCap: .round)
+                    )
+                    .blendMode(.screen)
+            )
+            .frame(width: shackleSpan, height: size * 0.30)
+    }
+
+    private var lockBody: some View {
+        let shape = RoundedRectangle(cornerRadius: bodyRadius, style: .continuous)
+        return ZStack {
+            shape.fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: .lkBodyTop, location: 0.0),
+                        .init(color: .lkBodyMid, location: 0.55),
+                        .init(color: .lkBodyBot, location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+
+            // Glossy top sheen
+            shape.fill(
+                LinearGradient(
+                    colors: [.white.opacity(0.45), .clear],
+                    startPoint: .top,
+                    endPoint: .center
+                )
+            )
+            .blendMode(.softLight)
+
+            keyhole
+
+            // Specular rim
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [.lkRimHi, .lkRimLow],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: bodyW * 0.012
+            )
+
+            // Top-leading bright catch
+            shape.strokeBorder(
+                RadialGradient(
+                    gradient: Gradient(colors: [.white.opacity(0.85), .clear]),
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: bodyW * 0.4
+                ),
+                lineWidth: bodyW * 0.016
+            )
+            .blendMode(.screen)
+        }
+        .frame(width: bodyW, height: bodyH)
+    }
+
+    private var keyhole: some View {
+        let circle = bodyW * 0.155
+        let stemH = bodyH * 0.26
+        return VStack(spacing: -circle * 0.18) {
+            Circle()
+                .fill(Color.lkKeyhole)
+                .frame(width: circle, height: circle)
+            KeyStemShape()
+                .fill(Color.lkKeyhole)
+                .frame(width: circle * 0.9, height: stemH)
+        }
+        .offset(y: -bodyH * 0.02)
     }
 }
