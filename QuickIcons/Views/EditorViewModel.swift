@@ -36,6 +36,11 @@ final class EditorViewModel {
     var compiledImage: NSImage?
     var hasCompiledIcon: Bool = false
 
+    /// Which framing the preview renders. macOS icons are exported with a rounded body and
+    /// transparent margin; iOS/iPad icons are exported full-bleed. ``EditorView`` re-renders
+    /// the preview via ``renderPreview()`` when this changes.
+    var previewMode: IconPreviewMode = .macOS
+
     // MARK: - Export lifecycle
 
     var exportMessage: ExportMessage?
@@ -158,8 +163,8 @@ final class EditorViewModel {
         switch await compiler.compile(source: sourceCode, viewName: viewName) {
         case .success(let dylibURL):
             compiledDylibURL = dylibURL
-            compiledImage = previewer.render(dylibURL: dylibURL, size: 400)
             hasCompiledIcon = true
+            renderPreview()
         case .failure(let diagnostics):
             clearCompiledIcon()
             if let first = diagnostics.first(where: { $0.severity == .error }) ?? diagnostics.first {
@@ -168,6 +173,13 @@ final class EditorViewModel {
                 compileError = "Compilation failed with unknown error."
             }
         }
+    }
+
+    /// Re-renders the preview image for the current ``previewMode`` from the most recently
+    /// compiled dylib. No-ops if nothing has compiled yet.
+    func renderPreview() {
+        guard let dylibURL = compiledDylibURL else { return }
+        compiledImage = previewer.render(dylibURL: dylibURL, size: 400, mode: previewMode)
     }
 
     /// Clears the compiled-icon state after a failed or rejected compile.

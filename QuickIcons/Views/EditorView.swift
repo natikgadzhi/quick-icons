@@ -31,7 +31,8 @@ struct EditorView: View {
                     image: model.compiledImage,
                     errorMessage: model.compileError,
                     isCompiling: model.isCompiling,
-                    exportMessage: $model.exportMessage
+                    exportMessage: $model.exportMessage,
+                    previewMode: $model.previewMode
                 )
                 .frame(
                     minWidth: 300,
@@ -57,6 +58,7 @@ struct EditorView: View {
             }
         }
         .onChange(of: model.sourceCode) { model.sourceCodeChanged() }
+        .onChange(of: model.previewMode) { model.renderPreview() }
         .focusedSceneValue(\.editorViewModel, model)
         .toolbar {
             if model.diagnosticsUnavailable {

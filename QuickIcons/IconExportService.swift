@@ -38,7 +38,7 @@ struct IconExportService {
         try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
 
         for variant in AppIconVariant.all {
-            let view = viewFactory(variant.pixelSize)
+            let view = renderView(for: variant, viewFactory: viewFactory)
             guard let image = render(view, pixelSize: variant.pixelSize) else {
                 throw IconExportError.renderingFailed(size: variant.pixelSize)
             }
@@ -53,6 +53,18 @@ struct IconExportService {
         try contentsData.write(to: destination.appendingPathComponent("Contents.json"), options: .atomic)
 
         return destination
+    }
+
+    /// The view to render for a variant. macOS icons receive Apple's rounded-square framing
+    /// with a transparent margin baked in; iOS/iPad icons stay full-bleed (the OS masks them).
+    private func renderView(
+        for variant: AppIconVariant,
+        viewFactory: @escaping (CGFloat) -> AnyView
+    ) -> AnyView {
+        guard variant.idiom == "mac" else {
+            return viewFactory(variant.pixelSize)
+        }
+        return AnyView(MacIconFrame(canvasSize: variant.pixelSize) { viewFactory($0) })
     }
 
     private func render<V: View>(_ view: V, pixelSize: CGFloat) -> CGImage? {

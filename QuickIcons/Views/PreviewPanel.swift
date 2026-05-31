@@ -6,6 +6,7 @@ struct PreviewPanel: View {
     var errorMessage: String?
     var isCompiling: Bool = false
     @Binding var exportMessage: ExportMessage?
+    @Binding var previewMode: IconPreviewMode
 
     @State private var dismissTask: Task<Void, Never>?
 
@@ -26,6 +27,19 @@ struct PreviewPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            if image != nil, errorMessage == nil {
+                Picker("Preview mode", selection: $previewMode) {
+                    ForEach(IconPreviewMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .padding(.top, 12)
+            }
+        }
         .overlay(alignment: .bottom) {
             if let exportMessage {
                 toastView(message: exportMessage)
@@ -131,26 +145,26 @@ struct PreviewPanel: View {
 }
 
 #Preview("Empty") {
-    PreviewPanel(image: nil, exportMessage: .constant(nil))
+    PreviewPanel(image: nil, exportMessage: .constant(nil), previewMode: .constant(.macOS))
         .frame(width: 400, height: 400)
 }
 
 #Preview("Error") {
-    PreviewPanel(image: nil, errorMessage: "Error on line 14: use of unresolved identifier 'foo'", exportMessage: .constant(nil))
+    PreviewPanel(image: nil, errorMessage: "Error on line 14: use of unresolved identifier 'foo'", exportMessage: .constant(nil), previewMode: .constant(.macOS))
         .frame(width: 400, height: 400)
 }
 
 #Preview("Compiling") {
-    PreviewPanel(image: nil, errorMessage: nil, isCompiling: true, exportMessage: .constant(nil))
+    PreviewPanel(image: nil, errorMessage: nil, isCompiling: true, exportMessage: .constant(nil), previewMode: .constant(.macOS))
         .frame(width: 400, height: 400)
 }
 
 #Preview("Export Success Toast") {
-    PreviewPanel(image: nil, exportMessage: .constant(.success("/Users/me/Desktop/AppIcon.appiconset")))
+    PreviewPanel(image: nil, exportMessage: .constant(.success("/Users/me/Desktop/AppIcon.appiconset")), previewMode: .constant(.macOS))
         .frame(width: 400, height: 400)
 }
 
 #Preview("Export Error Toast") {
-    PreviewPanel(image: nil, exportMessage: .constant(.error("Failed to write to /tmp: permission denied")))
+    PreviewPanel(image: nil, exportMessage: .constant(.error("Failed to write to /tmp: permission denied")), previewMode: .constant(.macOS))
         .frame(width: 400, height: 400)
 }

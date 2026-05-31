@@ -23,14 +23,21 @@ final class IconPreviewService {
     }
 
     /// Renders the icon defined in the dylib at `dylibURL` into an `NSImage` of `size × size` points.
-    /// Returns `nil` if loading or rendering fails.
-    func render(dylibURL: URL, size: CGFloat) -> NSImage? {
+    /// `mode` selects whether Apple's macOS framing (rounded body + transparent margin) is applied
+    /// or the raw full-bleed artwork is shown. Returns `nil` if loading or rendering fails.
+    func render(dylibURL: URL, size: CGFloat, mode: IconPreviewMode = .macOS) -> NSImage? {
         guard let factory = try? session.loadIcon(at: dylibURL) else {
             return nil
         }
 
-        let view = factory.view(size: size)
-        let renderer = ImageRenderer(content: view)
+        let content: AnyView
+        switch mode {
+        case .original:
+            content = factory.view(size: size)
+        case .macOS:
+            content = AnyView(MacIconFrame(canvasSize: size) { factory.view(size: $0) })
+        }
+        let renderer = ImageRenderer(content: content)
         renderer.scale = 2
         renderer.proposedSize = ProposedViewSize(width: size, height: size)
 
