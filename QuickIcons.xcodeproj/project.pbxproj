@@ -39,16 +39,22 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		287C3BDB2F95386A00AD6EC5 /* QuickIcons */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = QuickIcons;
 			sourceTree = "<group>";
 		};
 		287C3BE92F95386C00AD6EC5 /* QuickIconsTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = QuickIconsTests;
 			sourceTree = "<group>";
 		};
 		287C3BF32F95386C00AD6EC5 /* QuickIconsUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = QuickIconsUITests;
 			sourceTree = "<group>";
 		};
@@ -149,8 +155,6 @@
 				287C3BE92F95386C00AD6EC5 /* QuickIconsTests */,
 			);
 			name = QuickIconsTests;
-			packageProductDependencies = (
-			);
 			productName = QuickIconsTests;
 			productReference = 287C3BE62F95386C00AD6EC5 /* QuickIconsTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -172,8 +176,6 @@
 				287C3BF32F95386C00AD6EC5 /* QuickIconsUITests */,
 			);
 			name = QuickIconsUITests;
-			packageProductDependencies = (
-			);
 			productName = QuickIconsUITests;
 			productReference = 287C3BF02F95386C00AD6EC5 /* QuickIconsUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -210,13 +212,13 @@
 			);
 			mainGroup = 287C3BD02F95386A00AD6EC5;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			packageReferences = (
 				AA01000000000000000000A1 /* XCRemoteSwiftPackageReference "STTextView" */,
 				AA02000000000000000000A2 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Neon" */,
 				AA03000000000000000000A3 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Annotations" */,
 				AA04000000000000000000A4 /* XCRemoteSwiftPackageReference "SourceKitten" */,
 			);
+			preferredProjectObjectVersion = 77;
 			productRefGroup = 287C3BDA2F95386A00AD6EC5 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -288,64 +290,6 @@
 			targetProxy = 287C3BF12F95386C00AD6EC5 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		AA01000000000000000000A1 /* XCRemoteSwiftPackageReference "STTextView" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/krzyzanowskim/STTextView.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-		AA02000000000000000000A2 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Neon" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/krzyzanowskim/STTextView-Plugin-Neon.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-		AA03000000000000000000A3 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Annotations" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/krzyzanowskim/STTextView-Plugin-Annotations.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-		AA04000000000000000000A4 /* XCRemoteSwiftPackageReference "SourceKitten" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/jpsim/SourceKitten.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.37.3;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		AA05000000000000000000A5 /* STTextView */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AA01000000000000000000A1 /* XCRemoteSwiftPackageReference "STTextView" */;
-			productName = STTextView;
-		};
-		AA07000000000000000000A7 /* STTextView-Plugin-Neon */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AA02000000000000000000A2 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Neon" */;
-			productName = STTextView-Plugin-Neon;
-		};
-		AA08000000000000000000A8 /* STTextViewAnnotationsPlugin */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AA03000000000000000000A3 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Annotations" */;
-			productName = STTextViewAnnotationsPlugin;
-		};
-		AA09000000000000000000AA /* SourceKittenFramework */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AA04000000000000000000A4 /* XCRemoteSwiftPackageReference "SourceKitten" */;
-			productName = SourceKittenFramework;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		287C3BF82F95386C00AD6EC5 /* Debug */ = {
@@ -656,6 +600,64 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA01000000000000000000A1 /* XCRemoteSwiftPackageReference "STTextView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzyzanowskim/STTextView.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		AA02000000000000000000A2 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Neon" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzyzanowskim/STTextView-Plugin-Neon.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		AA03000000000000000000A3 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Annotations" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzyzanowskim/STTextView-Plugin-Annotations.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		AA04000000000000000000A4 /* XCRemoteSwiftPackageReference "SourceKitten" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jpsim/SourceKitten.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.37.3;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA05000000000000000000A5 /* STTextView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA01000000000000000000A1 /* XCRemoteSwiftPackageReference "STTextView" */;
+			productName = STTextView;
+		};
+		AA07000000000000000000A7 /* STTextView-Plugin-Neon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA02000000000000000000A2 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Neon" */;
+			productName = "STTextView-Plugin-Neon";
+		};
+		AA08000000000000000000A8 /* STTextViewAnnotationsPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA03000000000000000000A3 /* XCRemoteSwiftPackageReference "STTextView-Plugin-Annotations" */;
+			productName = STTextViewAnnotationsPlugin;
+		};
+		AA09000000000000000000AA /* SourceKittenFramework */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA04000000000000000000A4 /* XCRemoteSwiftPackageReference "SourceKitten" */;
+			productName = SourceKittenFramework;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 287C3BD12F95386A00AD6EC5 /* Project object */;
 }
