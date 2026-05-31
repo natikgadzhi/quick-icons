@@ -33,14 +33,55 @@ struct MacIconFrame<Content: View>: View {
 
     var body: some View {
         let bodySize = MacIconGeometry.bodySize(forCanvas: canvasSize)
+        let shape = RoundedRectangle(
+            cornerRadius: bodySize * MacIconGeometry.cornerRadiusRatio,
+            style: .continuous
+        )
         content(bodySize)
             .frame(width: bodySize, height: bodySize)
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: bodySize * MacIconGeometry.cornerRadiusRatio,
-                    style: .continuous
+            .clipShape(shape)
+            .overlay { rimLighting(shape, bodySize: bodySize) }
+            .frame(width: canvasSize, height: canvasSize)
+    }
+
+    /// A glossy beveled rim: a faint light catch around the whole edge, a brighter
+    /// specular highlight along the top (the light source), and a soft inner shadow on the
+    /// bottom edge for depth. Strokes are inner (`strokeBorder`) so they hug the rounded
+    /// edge and never bleed into the transparent margin.
+    @ViewBuilder
+    private func rimLighting(_ shape: RoundedRectangle, bodySize: CGFloat) -> some View {
+        ZStack {
+            // 1. Glass sheen over the upper surface — reads as a reflection.
+            shape.fill(
+                LinearGradient(
+                    colors: [.white.opacity(0.30), .white.opacity(0.0)],
+                    startPoint: .top,
+                    endPoint: UnitPoint(x: 0.5, y: 0.45)
                 )
             )
-            .frame(width: canvasSize, height: canvasSize)
+
+            // 2. Even rim around the whole edge so every side catches light.
+            shape.strokeBorder(.white.opacity(0.30), lineWidth: bodySize * 0.012)
+
+            // 3. Crisp bright specular right at the top edge.
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [.white, .white.opacity(0.0)],
+                    startPoint: .top,
+                    endPoint: UnitPoint(x: 0.5, y: 0.14)
+                ),
+                lineWidth: bodySize * 0.010
+            )
+
+            // 4. Bottom inner shadow for the beveled, glassy depth.
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.35)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                ),
+                lineWidth: bodySize * 0.018
+            )
+        }
     }
 }

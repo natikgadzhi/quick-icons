@@ -72,6 +72,39 @@ struct IconExportMacMaskTests {
         #expect(center.r > center.g && center.r > center.b, "macOS icon center must be red-dominant")
     }
 
+    /// A flat mid-gray square — any per-edge brightness difference comes from the rim
+    /// lighting, not the artwork.
+    private func solidGrayFactory(_ size: CGFloat) -> AnyView {
+        AnyView(Color(white: 0.5).frame(width: size, height: size))
+    }
+
+    @Test func macIconHasGlossyBeveledRimLighting() throws {
+        let base = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let result = try IconExportService().export(
+            viewFactory: solidGrayFactory,
+            name: "TestIcon",
+            to: base
+        )
+        // icon_512x512@2x.png is a 1024px macOS variant; the 824-pt body starts ~100px in.
+        let macURL = result.appendingPathComponent("icon_512x512@2x.png")
+
+        func luma(_ x: Int, _ y: Int) throws -> Int {
+            let p = try #require(pixel(in: macURL, x: x, y: y))
+            return Int(p.r) + Int(p.g) + Int(p.b)
+        }
+
+        let center = try luma(512, 512)
+        let topEdge = try luma(512, 106)
+        let bottomEdge = try luma(512, 918)
+        let leftEdge = try luma(106, 512)
+
+        #expect(topEdge > center, "top edge must be brighter than center (specular highlight)")
+        #expect(leftEdge > center, "side edge must be brighter than center (all-sides rim)")
+        #expect(bottomEdge < center, "bottom edge must be darker than center (glossy inner shadow)")
+    }
+
     @Test func iosVariantStaysFullBleed() throws {
         let base = try makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: base) }
