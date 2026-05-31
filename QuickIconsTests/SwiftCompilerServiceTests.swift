@@ -146,7 +146,8 @@ struct SwiftCompilerServiceIntegrationTests {
         switch result {
         case .success(let url):
             #expect(FileManager.default.fileExists(atPath: url.path), "dylib should exist on disk")
-            #expect(url.lastPathComponent == "quickicons-usericon.dylib")
+            #expect(url.lastPathComponent.hasPrefix("quickicons-usericon-"))
+            #expect(url.pathExtension == "dylib")
         case .failure(let diagnostics):
             // Print diagnostics for easier debugging on failure
             let messages = diagnostics.map { "\($0.severity.rawValue) \($0.line):\($0.column) \($0.message)" }
@@ -166,17 +167,20 @@ struct SwiftCompilerServiceIntegrationTests {
         }
     }
 
-    @Test func repeatedCompileOverwritesDylib() async {
-        // First compile
-        _ = await service.compile(source: trivialSource, viewName: "IconView")
-        // Second compile — should succeed without accumulating files
-        let result = await service.compile(source: trivialSource, viewName: "IconView")
-        switch result {
-        case .success(let url):
-            #expect(FileManager.default.fileExists(atPath: url.path))
-        case .failure(let diags):
-            let msgs = diags.map(\.message)
-            #expect(Bool(false), "Second compile failed: \(msgs)")
+    @Test func repeatedCompileReplacesDylibWithFreshPath() async {
+        // Each compile must produce a distinct path (so dyld reloads fresh code) while
+        // removing the previous build so temp files don't accumulate.
+        guard case .success(let first) = await service.compile(source: trivialSource, viewName: "IconView") else {
+            #expect(Bool(false), "First compile failed")
+            return
         }
+        guard case .success(let second) = await service.compile(source: trivialSource, viewName: "IconView") else {
+            #expect(Bool(false), "Second compile failed")
+            return
+        }
+
+        #expect(first.path != second.path, "each compile should use a fresh dylib path")
+        #expect(FileManager.default.fileExists(atPath: second.path), "latest dylib should exist")
+        #expect(!FileManager.default.fileExists(atPath: first.path), "previous dylib should be cleaned up")
     }
 }

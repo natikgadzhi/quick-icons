@@ -40,9 +40,17 @@ enum CompilationResult: Sendable {
 @MainActor
 final class SwiftCompilerService {
 
-    // Stable dylib path — reused across compiles so we never accumulate files.
-    private let dylibURL: URL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("quickicons-usericon.dylib")
+    // The dylib produced by the most recent successful compile. dyld dedupes loaded
+    // images by path, so reusing a single path makes `dlopen` return the previously
+    // loaded image instead of a rebuild — the bug where compiling a second icon still
+    // renders the first. Each compile therefore writes a fresh, uniquely-named dylib and
+    // deletes the previous one so temp files don't accumulate.
+    private var lastDylibURL: URL?
+
+    private func makeDylibURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("quickicons-usericon-\(UUID().uuidString).dylib")
+    }
 
     // Resolved lazily on first compile (off the main thread via async context)
     // to avoid blocking MainActor during init with synchronous xcrun calls.
@@ -80,9 +88,7 @@ final class SwiftCompilerService {
         }
         defer { try? fm.removeItem(at: sourceURL) }
 
-        if fm.fileExists(atPath: dylibURL.path) {
-            try? fm.removeItem(at: dylibURL)
-        }
+        let dylibURL = makeDylibURL()
 
         let args: [String] = [
             swiftcPath ?? "/usr/bin/swiftc",
@@ -97,8 +103,17 @@ final class SwiftCompilerService {
         let (exitCode, stderr) = await runProcess(args)
 
         if exitCode == 0 {
+            // Drop the previous build now that a fresh one has superseded it. Deleting the
+            // file is safe even if it's still dlopen'd — the in-memory image is unaffected.
+            if let previous = lastDylibURL {
+                try? fm.removeItem(at: previous)
+            }
+            lastDylibURL = dylibURL
             return .success(dylibURL: dylibURL)
         } else {
+            // Discard this build's (possibly partial) output; keep the last good dylib so a
+            // failed rebuild still leaves a loadable icon behind.
+            try? fm.removeItem(at: dylibURL)
             return .failure(diagnostics: parseStderr(stderr))
         }
     }
