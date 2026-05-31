@@ -90,7 +90,7 @@ struct BuildExportCommands: Commands {
                 guard let model else { return }
                 Task { await model.compile() }
             } label: {
-                Label("Build", systemImage: "hammer.fill")
+                Label("Build", systemImage: "play.fill")
             }
             .keyboardShortcut("b", modifiers: .command)
             .disabled(model == nil)

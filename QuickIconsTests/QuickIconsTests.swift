@@ -36,22 +36,78 @@ struct AppIconVariantTests {
     }
 }
 
-// MARK: - ExportableIcon
+// MARK: - IconSourceAnalysis
 
-struct ExportableIconTests {
-    @Test(arguments: ExportableIcon.allCases)
-    func titleNonEmpty(icon: ExportableIcon) {
-        #expect(!icon.title.isEmpty)
+struct IconSourceAnalysisTests {
+    @Test func entryPointNamedIconViewIsUsed() {
+        let source = """
+        import SwiftUI
+        struct IconView: View { var size: CGFloat; var body: some View { Color.red } }
+        """
+        #expect(IconSourceAnalysis.analyze(source) == .icon(viewName: "IconView"))
     }
 
-    @Test(arguments: ExportableIcon.allCases)
-    func exportDirectoryNameEndsWithAppiconset(icon: ExportableIcon) {
-        #expect(icon.exportDirectoryName.hasSuffix(".appiconset"))
+    @Test func singleDifferentlyNamedViewIsUsed() {
+        let source = """
+        import SwiftUI
+        struct MyCoolIcon: View { var size: CGFloat; var body: some View { Color.red } }
+        """
+        #expect(IconSourceAnalysis.analyze(source) == .icon(viewName: "MyCoolIcon"))
     }
 
-    @Test func allCasesHaveUniqueDirectoryNames() {
-        let names = ExportableIcon.allCases.map(\.exportDirectoryName)
-        #expect(Set(names).count == names.count)
+    @Test func iconViewWinsOverHelperViews() {
+        // A helper view (e.g. a grain overlay) may coexist with the entry point.
+        let source = """
+        import SwiftUI
+        struct FilmGrain: View { var body: some View { Color.clear } }
+        struct IconView: View { var size: CGFloat; var body: some View { FilmGrain() } }
+        """
+        #expect(IconSourceAnalysis.analyze(source) == .icon(viewName: "IconView"))
+    }
+
+    @Test func noViewIsIncompatible() {
+        // A non-icon Swift file (e.g. a service) must be rejected.
+        let source = """
+        import Foundation
+        struct IconExportService { func export() {} }
+        """
+        guard case .incompatible = IconSourceAnalysis.analyze(source) else {
+            Issue.record("Expected incompatible for a file with no SwiftUI view")
+            return
+        }
+    }
+
+    @Test func multipleViewsWithoutIconViewAreAmbiguous() {
+        let source = """
+        import SwiftUI
+        struct First: View { var body: some View { Color.red } }
+        struct Second: View { var body: some View { Color.blue } }
+        """
+        guard case .incompatible = IconSourceAnalysis.analyze(source) else {
+            Issue.record("Expected incompatible for ambiguous multi-view source")
+            return
+        }
+    }
+
+    @Test func nestedViewIsNotTopLevel() {
+        // A View nested inside another type must not count as a top-level entry.
+        let source = """
+        import SwiftUI
+        struct IconView: View {
+            struct Inner: View { var body: some View { Color.red } }
+            var size: CGFloat
+            var body: some View { Inner() }
+        }
+        """
+        #expect(IconSourceAnalysis.topLevelViewNames(in: source) == ["IconView"])
+    }
+
+    @Test func representableConformanceDoesNotFalsePositive() {
+        let source = """
+        import SwiftUI
+        struct Bridge: NSViewRepresentable { func makeNSView() {} }
+        """
+        #expect(IconSourceAnalysis.topLevelViewNames(in: source).isEmpty)
     }
 }
 

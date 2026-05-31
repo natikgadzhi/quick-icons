@@ -7,13 +7,17 @@ struct EditorPanel: View {
     /// Forwarded to ``STTextViewRepresentable`` — fires when the sourcekitd
     /// diagnostics pipeline becomes (un)available.
     var onDiagnosticsAvailabilityChange: ((Bool) -> Void)? = nil
+    /// Forwarded to ``STTextViewRepresentable`` — handles `.swift` files dropped
+    /// onto the editor. Returns whether the drop was handled.
+    var onDropFiles: (([URL]) -> Bool)? = nil
 
     var body: some View {
         STTextViewRepresentable(
             text: $sourceCode,
             showsInvisibles: showsInvisibles,
             fontSize: fontSize,
-            onDiagnosticsAvailabilityChange: onDiagnosticsAvailabilityChange
+            onDiagnosticsAvailabilityChange: onDiagnosticsAvailabilityChange,
+            onDropFiles: onDropFiles
         )
     }
 }

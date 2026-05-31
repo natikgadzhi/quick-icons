@@ -19,6 +19,10 @@ struct STTextViewRepresentable: NSViewRepresentable {
     /// timed out, or was unreachable) and the UI should surface an "unavailable"
     /// affordance. `false` means the most recent request succeeded.
     var onDiagnosticsAvailabilityChange: ((Bool) -> Void)? = nil
+    /// Called when Finder file URLs are dropped onto the editor. Returns whether
+    /// the drop was handled; when it returns false (or is nil) the editor falls
+    /// back to STTextView's default text drag-and-drop.
+    var onDropFiles: (([URL]) -> Bool)? = nil
 
     // MARK: - NSViewRepresentable
 
@@ -27,14 +31,16 @@ struct STTextViewRepresentable: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = STTextView.scrollableTextView()
+        let scrollView = DropEnabledTextView.scrollableTextView()
         scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = false
         scrollView.scrollerStyle = .overlay
 
-        guard let textView = scrollView.documentView as? STTextView else {
+        guard let textView = scrollView.documentView as? DropEnabledTextView else {
             return scrollView
         }
+
+        textView.onDropFiles = onDropFiles
 
         textView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         textView.isHorizontallyResizable = false
@@ -219,6 +225,51 @@ struct STTextViewRepresentable: NSViewRepresentable {
         func textView(_ textView: STTextView, insertCompletionItem item: any STCompletionItem) {
             completion.insertCompletionItem(item, into: textView)
         }
+    }
+}
+
+/// STTextView subclass that intercepts Finder file-URL drags so dropping a
+/// `.swift` file loads it into the editor instead of inserting its path as text.
+///
+/// Only file-URL drags are diverted; every other drag (internal text moves,
+/// dragged-in text, rich text) falls through to `STTextView`'s default handling.
+final class DropEnabledTextView: STTextView {
+    /// Invoked with the dropped file URLs. Returns whether the drop was handled;
+    /// when it returns false (or is nil) default text drag handling applies.
+    var onDropFiles: (([URL]) -> Bool)?
+
+    /// File URLs resolved once when a drag enters; the pasteboard can't change
+    /// mid-session, so `draggingUpdated` (which fires continuously) reuses these
+    /// instead of re-reading the pasteboard each tick.
+    private var draggedFileURLs: [URL] = []
+
+    private func readFileURLs(_ sender: any NSDraggingInfo) -> [URL] {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        let objects = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options)
+        return (objects as? [URL]) ?? []
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        draggedFileURLs = readFileURLs(sender)
+        return draggedFileURLs.isEmpty ? super.draggingEntered(sender) : .copy
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        draggedFileURLs.isEmpty ? super.draggingUpdated(sender) : .copy
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        draggedFileURLs = []
+        super.draggingExited(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        let urls = draggedFileURLs
+        draggedFileURLs = []
+        if !urls.isEmpty, let onDropFiles {
+            return onDropFiles(urls)
+        }
+        return super.performDragOperation(sender)
     }
 }
 

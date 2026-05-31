@@ -6,6 +6,7 @@ import SwiftUI
 /// purely structural and forwards toolbar / menu actions into the model.
 struct EditorView: View {
     @State private var model = EditorViewModel()
+    @State private var isDropTargeted = false
 
     var body: some View {
         @Bindable var model = model
@@ -18,7 +19,8 @@ struct EditorView: View {
                     fontSize: model.fontSize,
                     onDiagnosticsAvailabilityChange: { unavailable in
                         model.diagnosticsUnavailable = unavailable
-                    }
+                    },
+                    onDropFiles: { model.openDroppedFiles($0) }
                 )
                 .frame(
                     minWidth: 420,
@@ -39,6 +41,21 @@ struct EditorView: View {
             }
         }
         .frame(minWidth: 1080, minHeight: 500)
+        // Window-wide drop target so a .swift file can be dropped anywhere in the
+        // app. Drops over the editor itself are handled by DropEnabledTextView;
+        // this covers the preview pane and surrounding chrome.
+        .dropDestination(for: URL.self) { urls, _ in
+            model.openDroppedFiles(urls)
+        } isTargeted: {
+            isDropTargeted = $0
+        }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.accentColor, lineWidth: 3)
+                    .ignoresSafeArea()
+            }
+        }
         .onChange(of: model.sourceCode) { model.sourceCodeChanged() }
         .focusedSceneValue(\.editorViewModel, model)
         .toolbar {
@@ -57,7 +74,7 @@ struct EditorView: View {
                 } label: {
                     Label(
                         model.isCompiling ? "Building…" : "Build",
-                        systemImage: model.isCompiling ? "hammer" : "hammer.fill"
+                        systemImage: "play.fill"
                     )
                 }
                 .buttonStyle(.borderedProminent)

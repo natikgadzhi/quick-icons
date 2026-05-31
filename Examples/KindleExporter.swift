@@ -1,6 +1,10 @@
 //
-//  KindleExporterIcon.swift
-//  QuickIcons
+//  KindleExporter.swift
+//  QuickIcons — example icon
+//
+//  Open this file in QuickIcons to render and export it. The app renders the
+//  top-level `IconView`; `FilmGrain`, `SeededRNG`, and `BookmarkShape` are
+//  helpers it uses.
 //
 
 import SwiftUI
@@ -90,7 +94,7 @@ struct SeededRNG {
 
 // MARK: - Icon
 
-struct KindleExporterIcon: View {
+struct IconView: View {
     var size: CGFloat
 
     var body: some View {
@@ -228,8 +232,4 @@ struct KindleExporterIcon: View {
             )
             .frame(width: width, height: size * 0.034)
     }
-}
-
-#Preview {
-    KindleExporterIcon(size: 400)
 }

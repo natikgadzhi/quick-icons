@@ -98,7 +98,16 @@ final class EditorViewModel {
     /// describing any read error and leaves existing source untouched.
     func openFile(at url: URL) {
         do {
-            sourceCode = try readSwiftSource(at: url)
+            let source = try readSwiftSource(at: url)
+
+            // Reject files that aren't renderable icons before they replace the
+            // editor's contents, surfacing the reason as a toast.
+            if case .incompatible(let reason) = IconSourceAnalysis.analyze(source) {
+                exportMessage = .error("\(url.lastPathComponent): \(reason)")
+                return
+            }
+
+            sourceCode = source
         } catch {
             let alert = NSAlert()
             alert.alertStyle = .warning
@@ -109,6 +118,21 @@ final class EditorViewModel {
         }
     }
 
+    // MARK: - Drag & drop
+
+    /// Loads the first dropped Swift file into the editor. Returns whether the
+    /// drop was accepted (a `.swift` file was present). Non-Swift drops surface a
+    /// toast; compatibility of the Swift file itself is handled by ``openFile(at:)``.
+    @discardableResult
+    func openDroppedFiles(_ urls: [URL]) -> Bool {
+        guard let url = urls.first(where: { $0.pathExtension.lowercased() == "swift" }) else {
+            exportMessage = .error("Drop a Swift (.swift) icon file.")
+            return false
+        }
+        openFile(at: url)
+        return true
+    }
+
     // MARK: - Compile
 
     /// Compiles the current ``sourceCode`` and, on success, renders the preview
@@ -117,26 +141,40 @@ final class EditorViewModel {
         isCompiling = true
         compileError = nil
         exportMessage = nil
+        defer { isCompiling = false }
 
-        let result = await compiler.compile(source: sourceCode)
+        // Resolve the entry-point view (and reject non-icon source) before
+        // spending a swiftc invocation.
+        let viewName: String
+        switch IconSourceAnalysis.analyze(sourceCode) {
+        case .icon(let name):
+            viewName = name
+        case .incompatible(let reason):
+            clearCompiledIcon()
+            compileError = reason
+            return
+        }
 
-        switch result {
+        switch await compiler.compile(source: sourceCode, viewName: viewName) {
         case .success(let dylibURL):
             compiledDylibURL = dylibURL
             compiledImage = previewer.render(dylibURL: dylibURL, size: 400)
             hasCompiledIcon = true
         case .failure(let diagnostics):
-            compiledDylibURL = nil
-            compiledImage = nil
-            hasCompiledIcon = false
+            clearCompiledIcon()
             if let first = diagnostics.first(where: { $0.severity == .error }) ?? diagnostics.first {
                 compileError = "Error on line \(first.line): \(first.message)"
             } else {
                 compileError = "Compilation failed with unknown error."
             }
         }
+    }
 
-        isCompiling = false
+    /// Clears the compiled-icon state after a failed or rejected compile.
+    private func clearCompiledIcon() {
+        compiledDylibURL = nil
+        compiledImage = nil
+        hasCompiledIcon = false
     }
 
     // MARK: - Export

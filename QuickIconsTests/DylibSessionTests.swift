@@ -30,7 +30,7 @@ struct DylibSessionIntegrationTests {
     """
 
     @Test func loadIconResolvesBridgeSymbolAndProducesView() async {
-        let result = await compiler.compile(source: trivialSource)
+        let result = await compiler.compile(source: trivialSource, viewName: "IconView")
         guard case .success(let dylibURL) = result else {
             #expect(Bool(false), "Compilation failed; cannot test DylibSession")
             return
@@ -57,7 +57,7 @@ struct DylibSessionIntegrationTests {
     }
 
     @Test func loadIconReplacesPreviousHandleOnReload() async {
-        let result = await compiler.compile(source: trivialSource)
+        let result = await compiler.compile(source: trivialSource, viewName: "IconView")
         guard case .success(let dylibURL) = result else {
             #expect(Bool(false), "Compilation failed; cannot test reload")
             return

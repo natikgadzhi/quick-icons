@@ -1,11 +1,14 @@
 //
-//  ScrapesBookIconView.swift
-//  QuickIcons
+//  Scrapes.swift
+//  QuickIcons — example icon
+//
+//  Open this file in QuickIcons to render and export it. The app renders the
+//  top-level `IconView`.
 //
 
 import SwiftUI
 
-struct ScrapesBookIconView: View {
+struct IconView: View {
     var size: CGFloat
 
     var body: some View {
@@ -49,8 +52,4 @@ struct ScrapesBookIconView: View {
 extension Color {
     static let iconBackground = Color.black
     static let bookmark = Color.yellow
-}
-
-#Preview {
-    ScrapesBookIconView(size: 200)
 }

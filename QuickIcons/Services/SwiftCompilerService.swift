@@ -53,9 +53,11 @@ final class SwiftCompilerService {
 
     // MARK: - Public API
 
-    /// Compiles `source` to a dylib, returning `.success(dylibURL)` on success or
-    /// `.failure(diagnostics)` when swiftc reports errors.
-    func compile(source: String) async -> CompilationResult {
+    /// Compiles `source` to a dylib, instantiating `viewName` in the bridge.
+    /// Returns `.success(dylibURL)` on success or `.failure(diagnostics)` when
+    /// swiftc reports errors. Callers are responsible for resolving `viewName`
+    /// (and rejecting non-icon source) via ``IconSourceAnalysis``.
+    func compile(source: String, viewName: String) async -> CompilationResult {
         if sdkPath == nil {
             sdkPath = await Task.detached { Self.resolveSDKPath() }.value
         }
@@ -67,7 +69,7 @@ final class SwiftCompilerService {
         let sourceURL = fm.temporaryDirectory
             .appendingPathComponent("quickicons-usericon-\(UUID().uuidString).swift")
 
-        let augmented = source + "\n" + bridgeSource
+        let augmented = source + "\n" + bridgeSource(viewName: viewName)
         do {
             try augmented.write(to: sourceURL, atomically: true, encoding: .utf8)
         } catch {
@@ -106,14 +108,16 @@ final class SwiftCompilerService {
     // NOTE: @_cdecl requires a C-compatible return type. AnyView cannot be used directly,
     // so the bridge returns an opaque pointer to a heap-retained AnyObject wrapping AnyView.
     // IconPreviewService (task 09) will retrieve this via dlsym and cast back using Unmanaged.
-    private let bridgeSource = """
-import SwiftUI
-@_cdecl("_quickIconsMakeView")
-public func _quickIconsMakeView(_ size: Double) -> UnsafeMutableRawPointer {
-    let view = AnyView(IconView(size: CGFloat(size)))
-    return Unmanaged.passRetained(view as AnyObject).toOpaque()
-}
-"""
+    private func bridgeSource(viewName: String) -> String {
+        """
+        import SwiftUI
+        @_cdecl("_quickIconsMakeView")
+        public func _quickIconsMakeView(_ size: Double) -> UnsafeMutableRawPointer {
+            let view = AnyView(\(viewName)(size: CGFloat(size)))
+            return Unmanaged.passRetained(view as AnyObject).toOpaque()
+        }
+        """
+    }
 
     // MARK: - stderr parsing
 

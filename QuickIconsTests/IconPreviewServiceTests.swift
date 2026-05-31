@@ -36,7 +36,7 @@ struct IconPreviewServiceIntegrationTests {
     """
 
     @Test func renderReturnNonNilImageForValidDylib() async {
-        let result = await compiler.compile(source: trivialSource)
+        let result = await compiler.compile(source: trivialSource, viewName: "IconView")
         guard case .success(let dylibURL) = result else {
             #expect(Bool(false), "Compilation failed; cannot test render")
             return
@@ -59,7 +59,7 @@ struct IconPreviewServiceIntegrationTests {
 
     @Test func renderHandlesRepeatedCallsClosingPreviousHandle() async {
         // Compile once and render twice — the service must close the previous handle each time.
-        let result = await compiler.compile(source: trivialSource)
+        let result = await compiler.compile(source: trivialSource, viewName: "IconView")
         guard case .success(let dylibURL) = result else {
             #expect(Bool(false), "Compilation failed; cannot test repeated render")
             return

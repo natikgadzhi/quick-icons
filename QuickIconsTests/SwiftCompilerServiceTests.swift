@@ -142,7 +142,7 @@ struct SwiftCompilerServiceIntegrationTests {
     """
 
     @Test func successfulCompileReturnsDylibURL() async {
-        let result = await service.compile(source: trivialSource)
+        let result = await service.compile(source: trivialSource, viewName: "IconView")
         switch result {
         case .success(let url):
             #expect(FileManager.default.fileExists(atPath: url.path), "dylib should exist on disk")
@@ -155,7 +155,7 @@ struct SwiftCompilerServiceIntegrationTests {
     }
 
     @Test func failedCompileReturnsDiagnosticsNotThrownError() async {
-        let result = await service.compile(source: brokenSource)
+        let result = await service.compile(source: brokenSource, viewName: "IconView")
         switch result {
         case .success:
             #expect(Bool(false), "Expected failure but got success")
@@ -168,9 +168,9 @@ struct SwiftCompilerServiceIntegrationTests {
 
     @Test func repeatedCompileOverwritesDylib() async {
         // First compile
-        _ = await service.compile(source: trivialSource)
+        _ = await service.compile(source: trivialSource, viewName: "IconView")
         // Second compile — should succeed without accumulating files
-        let result = await service.compile(source: trivialSource)
+        let result = await service.compile(source: trivialSource, viewName: "IconView")
         switch result {
         case .success(let url):
             #expect(FileManager.default.fileExists(atPath: url.path))

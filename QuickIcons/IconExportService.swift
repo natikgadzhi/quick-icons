@@ -24,34 +24,6 @@ enum IconExportError: LocalizedError {
 /// Renders SwiftUI icon views into a complete Apple AppIcon.appiconset bundle on disk.
 @MainActor
 struct IconExportService {
-    /// Exports all icon variants for `icon` into a new subdirectory inside `baseURL`.
-    /// Returns the URL of the created `.appiconset` directory.
-    func export(_ icon: ExportableIcon, to baseURL: URL) throws -> URL {
-        let fileManager = FileManager.default
-        let destination = baseURL.appendingPathComponent(icon.exportDirectoryName, isDirectory: true)
-
-        if fileManager.fileExists(atPath: destination.path) {
-            try fileManager.removeItem(at: destination)
-        }
-        try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
-
-        for variant in AppIconVariant.all {
-            guard let image = render(icon.view(size: variant.pixelSize), pixelSize: variant.pixelSize) else {
-                throw IconExportError.renderingFailed(size: variant.pixelSize)
-            }
-            try writePNG(image, to: destination.appendingPathComponent(variant.filename))
-        }
-
-        let contentsData = try JSONEncoder.appIconEncoder.encode(
-            AppIconContents(images: AppIconVariant.all.map {
-                .init(filename: $0.filename, idiom: $0.idiom, scale: $0.scale, size: $0.pointSize)
-            })
-        )
-        try contentsData.write(to: destination.appendingPathComponent("Contents.json"), options: .atomic)
-
-        return destination
-    }
-
     /// Exports all icon variants using a view factory closure into a new subdirectory inside `baseURL`.
     /// The factory receives the pixel size for each variant and returns the view to render.
     /// Returns the URL of the created `.appiconset` directory.
