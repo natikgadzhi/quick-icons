@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the GitHub Release + upload assets
+  id-token: write # OIDC token for the SLSA provenance attestation signer
+  attestations: write # store the attestation
+
+jobs:
+  release:
+    runs-on: macos-26 # match the macOS 26 (Tahoe) deployment target's SDK
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build, sign, notarize, staple
+        env:
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_NOTARY_API_KEY_BASE64: ${{ secrets.APPLE_NOTARY_API_KEY_BASE64 }}
+          APPLE_NOTARY_API_KEY_ID: ${{ secrets.APPLE_NOTARY_API_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: scripts/build-quickicons-dmg.sh
+
+      - name: Locate DMG
+        id: dmg
+        shell: bash
+        run: |
+          dmg_path="$(find build/release -maxdepth 1 -name '*.dmg' -print | head -n 1)"
+          if [[ -z "${dmg_path}" ]]; then
+            echo "No DMG artifact found in build/release" >&2
+            exit 1
+          fi
+          echo "path=${dmg_path}" >> "$GITHUB_OUTPUT"
+
+      # Guard against a tag whose version doesn't match the built bundle's
+      # MARKETING_VERSION: the DMG is named QuickIcons-<bundle version>.dmg, but
+      # the Homebrew cask URL is built from the tag. A mismatch would publish a
+      # release whose cask points at a non-existent asset, so fail loudly here.
+      - name: Verify tag matches built version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg_path="${{ steps.dmg.outputs.path }}"
+          built="$(basename "${dmg_path}")"; built="${built#QuickIcons-}"; built="${built%.dmg}"
+          tag="${GITHUB_REF_NAME#v}"
+          if [[ "${built}" != "${tag}" ]]; then
+            echo "Tag v${tag} does not match built MARKETING_VERSION ${built}." >&2
+            echo "Bump MARKETING_VERSION in project.pbxproj (use the Tag release workflow) before tagging." >&2
+            exit 1
+          fi
+
+      - name: Checksum
+        id: checksum
+        shell: bash
+        run: |
+          dmg_path="${{ steps.dmg.outputs.path }}"
+          # Write the checksum with just the basename (not the build/release/…
+          # path) so `shasum -a 256 -c QuickIcons-*.dmg.sha256` verifies the
+          # downloaded file directly.
+          ( cd "$(dirname "${dmg_path}")" && shasum -a 256 "$(basename "${dmg_path}")" ) \
+            | tee "${dmg_path}.sha256"
+          echo "sha256=$(shasum -a 256 "${dmg_path}" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.dmg.outputs.path }}
+
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            ${{ steps.dmg.outputs.path }}
+            ${{ steps.dmg.outputs.path }}.sha256
+          generate_release_notes: true
+          body: |
+            ### Verifying this build
+
+            **SHA-256:** `${{ steps.checksum.outputs.sha256 }}`
+
+            ```sh
+            shasum -a 256 QuickIcons*.dmg            # matches the hash above
+            gh attestation verify QuickIcons*.dmg --repo natikgadzhi/quick-icons
+            ```
+
+      - name: Check out the Homebrew tap
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/checkout@v5
+        with:
+          repository: natikgadzhi/homebrew-taps
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Regenerate and push the cask
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          cat > tap/Casks/quick-icons.rb <<EOF
+          # This file is updated by the quick-icons release workflow. DO NOT EDIT.
+          cask "quick-icons" do
+            version "${version}"
+            sha256 "${SHA256}"
+
+            url "https://github.com/natikgadzhi/quick-icons/releases/download/v#{version}/QuickIcons-#{version}.dmg",
+                verified: "github.com/natikgadzhi/quick-icons/"
+            name "Quick Icons"
+            desc "Compose and export macOS app icons from SwiftUI views"
+            homepage "https://github.com/natikgadzhi/quick-icons"
+
+            depends_on macos: ">= :tahoe"
+
+            app "QuickIcons.app"
+
+            zap trash: [
+              "~/Library/Caches/respawn.QuickIcons",
+              "~/Library/Preferences/respawn.QuickIcons.plist",
+              "~/Library/Saved Application State/respawn.QuickIcons.savedState",
+            ]
+          end
+          EOF
+          cd tap
+          if git diff --quiet -- Casks/quick-icons.rb; then
+            echo "Cask already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/quick-icons.rb
+          git commit -m "Brew cask update for quick-icons version v${version}"
+          git push origin HEAD:main
