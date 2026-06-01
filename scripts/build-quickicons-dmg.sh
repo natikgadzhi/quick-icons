@@ -44,6 +44,7 @@ require_command ditto
 require_command mktemp
 require_command security
 require_command base64
+require_command curl
 
 mkdir -p "${EXPORT_DIR}" "${RELEASE_DIR}" "${DMG_STAGING_DIR}"
 
@@ -63,8 +64,10 @@ import_signing_certificate_if_needed() {
     return
   fi
 
-  if [[ -z "${APPLE_DEVELOPER_ID_P12_PASSWORD:-}" ]]; then
-    echo "APPLE_DEVELOPER_ID_P12_PASSWORD is required when APPLE_DEVELOPER_ID_P12_BASE64 is set." >&2
+  # An empty export password is valid (`security import -P ""`), so only fail
+  # when the variable is genuinely unset — `+set` distinguishes that from "".
+  if [[ -z "${APPLE_DEVELOPER_ID_P12_PASSWORD+set}" ]]; then
+    echo "APPLE_DEVELOPER_ID_P12_PASSWORD must be set (may be empty) when APPLE_DEVELOPER_ID_P12_BASE64 is set." >&2
     exit 1
   fi
 
@@ -72,9 +75,9 @@ import_signing_certificate_if_needed() {
   decode_base64_to_file "${APPLE_DEVELOPER_ID_P12_BASE64}" "${cert_path}"
 
   security create-keychain -p "${TEMP_KEYCHAIN_PASSWORD}" "${TEMP_KEYCHAIN_PATH}"
-  KEYCHAIN_CREATED=1
   security set-keychain-settings -lut 21600 "${TEMP_KEYCHAIN_PATH}"
   security unlock-keychain -p "${TEMP_KEYCHAIN_PASSWORD}" "${TEMP_KEYCHAIN_PATH}"
+  KEYCHAIN_CREATED=1
 
   local existing_keychains
   existing_keychains="$(security list-keychains -d user | tr -d '"')"
@@ -95,13 +98,46 @@ import_signing_certificate_if_needed() {
     "${TEMP_KEYCHAIN_PATH}" >/dev/null
 }
 
+install_apple_intermediates_if_needed() {
+  # Only needed in CI, where the temp keychain has no Apple intermediates and
+  # the .p12 may not have shipped them. Without the intermediate, the leaf
+  # cert fails chain validation and `security find-identity -v` hides it.
+  if [[ "${KEYCHAIN_CREATED}" != "1" ]]; then
+    return
+  fi
+
+  local intermediates=(
+    "https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer"
+    "https://www.apple.com/certificateauthority/DeveloperIDCA.cer"
+    "https://www.apple.com/certificateauthority/AppleRootCA-G3.cer"
+  )
+
+  local url cert_path
+  for url in "${intermediates[@]}"; do
+    cert_path="${TEMP_DIR}/$(basename "${url}")"
+    if curl -fsSL --retry 3 -o "${cert_path}" "${url}"; then
+      security import "${cert_path}" -k "${TEMP_KEYCHAIN_PATH}" -T /usr/bin/codesign >/dev/null 2>&1 || true
+    else
+      echo "Warning: failed to download ${url}" >&2
+    fi
+  done
+}
+
 resolve_app_sign_identity() {
   if [[ -n "${APP_SIGN_IDENTITY}" ]]; then
     return
   fi
 
+  # Pass the temp keychain explicitly in CI and skip `-v`. A fresh CI keychain
+  # may lack Apple's Developer ID intermediate, which makes `-v` filter the
+  # identity out even when codesign would happily use it.
+  local find_identity_args=(-p codesigning)
+  if [[ "${KEYCHAIN_CREATED}" == "1" ]]; then
+    find_identity_args+=("${TEMP_KEYCHAIN_PATH}")
+  fi
+
   APP_SIGN_IDENTITY="$(
-    security find-identity -v -p codesigning 2>/dev/null |
+    security find-identity "${find_identity_args[@]}" 2>/dev/null |
       sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' |
       head -n 1
   )"
@@ -129,7 +165,10 @@ resolve_release_metadata() {
   fi
 
   if [[ -z "${DMG_NAME}" ]]; then
-    DMG_NAME="${DMG_BASENAME} ${DMG_VERSION}.dmg"
+    # Hyphen, not space: a space-free asset name survives GitHub's upload rename
+    # (spaces become dots) and keeps `shasum -c` working against the downloaded
+    # file (QuickIcons-<version>.dmg).
+    DMG_NAME="${DMG_BASENAME}-${DMG_VERSION}.dmg"
   fi
 }
 
@@ -220,6 +259,7 @@ EOF
 }
 
 import_signing_certificate_if_needed
+install_apple_intermediates_if_needed
 resolve_app_sign_identity
 archive_app
 sign_and_verify_app
