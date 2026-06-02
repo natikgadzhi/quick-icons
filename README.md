@@ -1,4 +1,8 @@
-# Quick Icons
+<p align="center">
+  <img src="QuickIcons/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png" width="180" alt="Quick Icons app icon">
+</p>
+
+<h1 align="center">Quick Icons</h1>
 
 Quick Icons is a macOS app that turns **SwiftUI views into App Iconsets** you can drop straight into your Mac or iOS apps. Design an icon as a regular SwiftUI view, preview it live, and export an `AppIcon.appiconset` ready for Xcode.
 
